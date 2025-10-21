@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>SIGEO AI • POI + AOI Drawing</title>
+  <title>SIGEO AI • POI + AOI Generate + Hide Buildings + Snap</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Mapbox GL -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet" />
@@ -10,7 +10,7 @@
   <!-- Mapbox GL Draw -->
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet"/>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
-  <!-- Turf -->
+  <!-- Turf (include polylabel) -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
   <!-- SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -19,7 +19,7 @@
     #map{position:absolute;inset:0}
 
     .panel{
-      position:absolute; z-index:10; right:12px; top:12px; width:400px; max-width:calc(100% - 24px);
+      position:absolute; z-index:10; right:12px; top:12px; width:420px; max-width:calc(100% - 24px);
       background:rgba(20,20,24,.95); color:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.25);
       display:flex; flex-direction:column; overflow:hidden;
     }
@@ -32,6 +32,7 @@
     .btn.warn{background:#ef4444;color:#2d0707}
     .btn.dark{background:#374151;color:#d1d5db}
     .btn.outline{background:transparent;border:1px solid rgba(255,255,255,.25);color:#e5e7eb}
+    select{background:#111827;color:#e5e7eb;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px}
     .stat{display:flex;gap:12px;align-items:center;margin:6px 0}
     .stat b{font-size:16px}
     .hint{opacity:.85}
@@ -59,7 +60,7 @@
 
   <div class="panel">
     <div class="panel-h">
-      <span>SIGEO AI — POI + AOI</span>
+      <span>SIGEO AI — POI + AOI Only + Snap</span>
       <span class="badge" id="viewInfo">view: 0×0</span>
     </div>
     <div class="panel-b">
@@ -69,7 +70,8 @@
       </div>
 
       <div class="row">
-        <button class="btn" id="genPoiBtn">Generate POI from OSM Buildings (in view)</button>
+        <button class="btn" id="genPoiBtn">Generate POI (in view)</button>
+        <button class="btn secondary" id="genAoiBtn">AOI-only Generate</button>
       </div>
 
       <!-- AOI controls -->
@@ -77,6 +79,16 @@
         <button class="btn secondary" id="drawAoiBtn">AOI: Draw/Edit</button>
         <button class="btn outline" id="applyAoiBtn">Apply AOI Filter</button>
         <button class="btn dark" id="clearAoiBtn">Clear AOI</button>
+      </div>
+
+      <!-- Display controls -->
+      <div class="row">
+        <button class="btn dark" id="toggleBldBtn">Buildings: Hide</button>
+        <select id="snapMode">
+          <option value="polylabel">Snap: Polylabel (visual center)</option>
+          <option value="centroid">Snap: Center of Mass</option>
+          <option value="pointon">Snap: Point On Feature</option>
+        </select>
       </div>
 
       <!-- Export/Import -->
@@ -93,13 +105,11 @@
         <button class="btn dark" id="clearBtn" style="flex:1">Clear POI</button>
       </div>
 
-      <div class="hint small">Tips: gambar AOI (polygon/rectangle). Klik “Apply AOI Filter” untuk hanya menampilkan POI yang berada di dalam AOI.</div>
+      <div class="hint small">Tips: untuk “mengikuti citra”, ganti style ke <b>satellite</b> via chat: <i>style satellite</i>. Mode <b>Polylabel</b> akan menempatkan titik di pusat visual atap.</div>
 
       <div style="margin-top:10px; font-weight:700">Preview (top 10 tampilan saat ini)</div>
       <table id="poiTable">
-        <thead>
-          <tr><th>#</th><th>Name</th><th>Type</th><th>Height</th><th>Lon</th><th>Lat</th></tr>
-        </thead>
+        <thead><tr><th>#</th><th>Name</th><th>Type</th><th>Height</th><th>Lon</th><th>Lat</th></tr></thead>
         <tbody></tbody>
       </table>
     </div>
@@ -110,7 +120,7 @@
     <div class="chat-h"><span>AI (Rule-Based)</span><span class="badge">/help</span></div>
     <div class="chat-b" id="chatBody">
       <div class="msg bot"><div class="bub">
-        Perintah: <i>generate</i>, <i>aoi apply</i>, <i>aoi clear</i>, <i>export csv|xlsx|geojson</i>, <i>clear</i>, <i>fly petronas</i>, <i>style satellite|dark|light|standard</i>, <i>help</i>.
+        Perintah: <i>generate</i>, <i>aoi generate</i>, <i>aoi apply</i>, <i>aoi clear</i>, <i>buildings hide</i>/<i>show</i>, <i>snap polylabel|centroid|pointon</i>, <i>export csv|xlsx|geojson</i>, <i>clear</i>, <i>fly petronas</i>, <i>style satellite|dark|light|standard</i>, <i>help</i>.
       </div></div>
     </div>
     <div class="chat-i">
@@ -120,12 +130,12 @@
   </div>
 
 <script>
+/* ========================= SETUP MAP ========================= */
 mapboxgl.accessToken = 'pk.eyJ1Ijoia2V0dXR0b215c3VoYXJpIiwiYSI6ImNrZmdvOWNvazBtM3EycmxkcHF3eXc0OTgifQ.J6kVGmohIIwY-A0hmt0gtg';
 const PETRONAS = [101.71186, 3.15776];
 
 const map = new mapboxgl.Map({
   container: 'map',
-  // supaya titik “mengikuti citra”, bisa ganti cepat ke satellite via chat: "style satellite"
   style: 'mapbox://styles/mapbox/standard',
   center: PETRONAS, zoom: 17.2, pitch: 72, bearing: 20, antialias: true, hash: true
 });
@@ -133,318 +143,274 @@ map.addControl(new mapboxgl.NavigationControl({ visualizePitch:true }), 'top-rig
 map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
 map.addControl(new mapboxgl.ScaleControl({ maxWidth: 120, unit: 'metric' }));
 
-// --- Draw control (AOI) ---
-const Draw = new MapboxDraw({
-  displayControlsDefault:false,
-  controls:{ polygon:true, trash:true, combine_features:false, uncombine_features:false },
-  defaultMode:'simple_select'
-});
+const Draw = new MapboxDraw({ displayControlsDefault:false, controls:{ polygon:true, trash:true }});
 map.addControl(Draw, 'top-left');
 
 map.on('style.load', () => {
-  // Terrain + sky
   try {
-    if (!map.getSource('mapbox-dem')) {
-      map.addSource('mapbox-dem',{ type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512 });
-    }
+    if (!map.getSource('mapbox-dem')) map.addSource('mapbox-dem',{ type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512 });
     map.setTerrain({ source:'mapbox-dem', exaggeration:1.0 });
-    if (!map.getLayer('sky')) {
-      map.addLayer({ id:'sky', type:'sky',
-        paint:{ 'sky-type':'atmosphere','sky-atmosphere-sun':[0,0],'sky-atmosphere-sun-intensity':10 }
-      });
-    }
+    if (!map.getLayer('sky')) map.addLayer({ id:'sky', type:'sky', paint:{ 'sky-type':'atmosphere','sky-atmosphere-sun':[0,0],'sky-atmosphere-sun-intensity':10 }});
   } catch(e){}
-
   ensure3DBuildingsLayer();
   ensurePoiSourcesAndLayers();
   updateViewInfo();
 });
 
-/* ========= Buildings (under points) ========= */
+/* ========================= BUILDINGS LAYER ========================= */
+let buildingsVisible = true;
 function ensure3DBuildingsLayer(){
   if (map.getLayer('3d-buildings')) return;
-  const layers = map.getStyle().layers;
-  let aboveId;
+  const layers = map.getStyle().layers; let aboveId;
   for (const l of layers) if (l.type==='symbol' && l.layout && l.layout['text-field']) { aboveId = l.id; break; }
   const heightExpr = [
-    'coalesce',
-    ['to-number', ['get','height']],
-    ['*', ['to-number', ['coalesce', ['get','levels'], ['get','building:levels'], 0]], 3]
+    'coalesce',['to-number',['get','height']],
+    ['*',['to-number',['coalesce',['get','levels'],['get','building:levels'],0]],3]
   ];
   map.addLayer({
-    id:'3d-buildings',
-    source:'composite',
-    'source-layer':'building',
-    type:'fill-extrusion',
-    minzoom:14,
+    id:'3d-buildings', source:'composite', 'source-layer':'building', type:'fill-extrusion', minzoom:14,
     paint:{
       'fill-extrusion-color':'#9aa6b2',
-      'fill-extrusion-height': ['case', ['>=',heightExpr,1], heightExpr, 0],
-      'fill-extrusion-base': ['coalesce', ['to-number', ['get','min_height']], 0],
-      'fill-extrusion-opacity': 0.9
+      'fill-extrusion-height':['case',['>=',heightExpr,1],heightExpr,0],
+      'fill-extrusion-base':['coalesce',['to-number',['get','min_height']],0],
+      'fill-extrusion-opacity':0.9
     }
   }, aboveId);
 }
-
-/* ========= Helpers ========= */
-function waitForIdleOnce() {
-  return new Promise(resolve => { map.once('idle', resolve); map.triggerRepaint && map.triggerRepaint(); });
+function setBuildingsVisibility(v){
+  buildingsVisible = (v!=='none');
+  if (map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility', buildingsVisible?'visible':'none');
 }
+
+/* ========================= HELPERS ========================= */
+function waitForIdleOnce(){ return new Promise(r=>{ map.once('idle', r); map.triggerRepaint && map.triggerRepaint(); }); }
 function keyLonLat(lon, lat){ return `${Number(lon).toFixed(7)},${Number(lat).toFixed(7)}`; }
 function makeId(){ return Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4); }
+function fc(features){ return { type:'FeatureCollection', features }; }
 
-/* ========= Sources/Layers for POI (all + filtered) ========= */
-let poiAll = [];               // semua POI hasil generate
-const poiIndex = new Set();    // anti duplikat
-let aoiGeom = null;            // GeoJSON geometry (Polygon/MultiPolygon)
-let aoiFilterOn = false;
-
-const SRC_POI_ALL = 'poi-all-src';
-const SRC_POI_AOI = 'poi-aoi-src';
-const LYR_POI_DOTS_ALL = 'poi-dots-all';
-const LYR_POI_LABEL_ALL= 'poi-label-all';
-const LYR_POI_DOTS_AOI = 'poi-dots-aoi';
-const LYR_POI_LABEL_AOI= 'poi-label-aoi';
+/* ========================= POI SOURCES/LAYERS ========================= */
+let poiAll = []; const poiIndex = new Set();
+let aoiGeom = null; let aoiFilterOn = false;
+const SRC_POI_ALL='poi-all-src', SRC_POI_AOI='poi-aoi-src';
+const LYR_POI_DOTS_ALL='poi-dots-all', LYR_POI_LABEL_ALL='poi-label-all';
+const LYR_POI_DOTS_AOI='poi-dots-aoi', LYR_POI_LABEL_AOI='poi-label-aoi';
 
 function ensurePoiSourcesAndLayers(){
-  // sources
-  if (!map.getSource(SRC_POI_ALL)) map.addSource(SRC_POI_ALL, { type:'geojson', data: fc([]) });
-  if (!map.getSource(SRC_POI_AOI)) map.addSource(SRC_POI_AOI, { type:'geojson', data: fc([]) });
+  if (!map.getSource(SRC_POI_ALL)) map.addSource(SRC_POI_ALL,{ type:'geojson', data: fc([]) });
+  if (!map.getSource(SRC_POI_AOI)) map.addSource(SRC_POI_AOI,{ type:'geojson', data: fc([]) });
 
-  const above = '3d-buildings'; // points above buildings
-  // ALL - circle
+  const above='3d-buildings';
   if (!map.getLayer(LYR_POI_DOTS_ALL)) map.addLayer({
-    id: LYR_POI_DOTS_ALL, type:'circle', source:SRC_POI_ALL,
-    paint:{
-      'circle-radius': 4.5,
-      'circle-color': '#00e5a8',
-      'circle-stroke-color': '#03201a',
-      'circle-stroke-width': 1.2
-    }
+    id:LYR_POI_DOTS_ALL, type:'circle', source:SRC_POI_ALL,
+    paint:{ 'circle-radius':4.5,'circle-color':'#00e5a8','circle-stroke-color':'#03201a','circle-stroke-width':1.2 }
   }, above);
-  // ALL - label
   if (!map.getLayer(LYR_POI_LABEL_ALL)) map.addLayer({
-    id: LYR_POI_LABEL_ALL, type:'symbol', source:SRC_POI_ALL,
-    layout:{ 'text-field':['coalesce',['get','name'],'POI'], 'text-size':11, 'text-offset':[0,1.1], 'text-anchor':'top' },
-    paint:{ 'text-color':'#ffffff', 'text-halo-color':'#111', 'text-halo-width':1.2 }
+    id:LYR_POI_LABEL_ALL, type:'symbol', source:SRC_POI_ALL,
+    layout:{ 'text-field':['coalesce',['get','name'],'POI'],'text-size':11,'text-offset':[0,1.1],'text-anchor':'top' },
+    paint:{ 'text-color':'#fff','text-halo-color':'#111','text-halo-width':1.2 }
   }, LYR_POI_DOTS_ALL);
 
-  // AOI - circle
   if (!map.getLayer(LYR_POI_DOTS_AOI)) map.addLayer({
-    id: LYR_POI_DOTS_AOI, type:'circle', source:SRC_POI_AOI,
+    id:LYR_POI_DOTS_AOI, type:'circle', source:SRC_POI_AOI,
     layout:{ 'visibility':'none' },
-    paint:{
-      'circle-radius': 5.2,
-      'circle-color': '#ffd166',
-      'circle-stroke-color': '#2b1900',
-      'circle-stroke-width': 1.4
-    }
+    paint:{ 'circle-radius':5.2,'circle-color':'#ffd166','circle-stroke-color':'#2b1900','circle-stroke-width':1.4 }
   }, LYR_POI_LABEL_ALL);
-  // AOI - label
   if (!map.getLayer(LYR_POI_LABEL_AOI)) map.addLayer({
-    id: LYR_POI_LABEL_AOI, type:'symbol', source:SRC_POI_AOI,
-    layout:{ 'text-field':['coalesce',['get','name'],'POI'], 'text-size':12, 'text-offset':[0,1.2], 'text-anchor':'top', 'visibility':'none' },
-    paint:{ 'text-color':'#fff7e6', 'text-halo-color':'#2b1900', 'text-halo-width':1.4 }
+    id:LYR_POI_LABEL_AOI, type:'symbol', source:SRC_POI_AOI,
+    layout:{ 'text-field':['coalesce',['get','name'],'POI'],'text-size':12,'text-offset':[0,1.2],'text-anchor':'top','visibility':'none' },
+    paint:{ 'text-color':'#fff7e6','text-halo-color':'#2b1900','text-halo-width':1.4 }
   }, LYR_POI_DOTS_AOI);
 }
+function setSourceData(id, features){ const s=map.getSource(id); if (s) s.setData(fc(features)); }
+function refreshCounters(list){ document.getElementById('poiCount').textContent=String(poiAll.length); document.getElementById('aoiCount').textContent=String(list.length); renderPreviewTable(list.slice(0,10)); }
 
-function fc(features){ return { type:'FeatureCollection', features }; }
-function setSourceData(id, features){ const s = map.getSource(id); if (s) s.setData(fc(features)); }
-function refreshCounters(visibleList){
-  document.getElementById('poiCount').textContent = String(poiAll.length);
-  document.getElementById('aoiCount').textContent = String(visibleList.length);
-  renderPreviewTable(visibleList.slice(0,10));
-}
-
-/* ========= Building features from vector tiles ========= */
+/* ========================= GET BUILDINGS ========================= */
 function getBuildingsInView(){
-  let feats = [];
-  try { feats = map.querySourceFeatures('composite', { sourceLayer:'building' }) || []; }
-  catch(e){ feats = map.queryRenderedFeatures(); }
-  const b = map.getBounds();
-  const vp = turf.bboxPolygon([b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]);
+  let feats=[]; try{ feats=map.querySourceFeatures('composite',{sourceLayer:'building'})||[]; }catch(e){ feats=map.queryRenderedFeatures(); }
+  const b=map.getBounds(); const vp=turf.bboxPolygon([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()]);
   return feats.filter(f=>{
-    const g = f.geometry; if (!g || (g.type!=='Polygon' && g.type!=='MultiPolygon')) return false;
-    const p = f.properties||{};
-    const looksBuilding = ('building'in p)||('type'in p)||('height'in p)||('levels'in p)||('building:levels'in p);
-    if (!looksBuilding) return false;
-    try { return turf.booleanIntersects({type:'Feature',geometry:g,properties:{}}, vp); }
-    catch(_){ return true; }
+    const g=f.geometry, t=g?.type; if (t!=='Polygon'&&t!=='MultiPolygon') return false;
+    const p=f.properties||{}; const ok=('building'in p)||('type'in p)||('height'in p)||('levels'in p)||('building:levels'in p);
+    if(!ok) return false;
+    try{ return turf.booleanIntersects({type:'Feature',geometry:g}, vp);}catch(_){return true;}
   });
 }
-function safeCenterPoint(geom){
-  try { return turf.centerOfMass({type:'Feature',geometry:geom}); }
-  catch(e){ try { return turf.pointOnFeature({type:'Feature',geometry:geom}); } catch(e2){ return null; } }
-}
-function resolveHeight(props){
-  const h = Number(props?.height); if (isFinite(h)&&h>0) return h;
-  const lv = Number(props?.levels || props?.['building:levels']);
-  return (isFinite(lv)&&lv>0) ? lv*3 : null;
+function getBuildingsInAOI(){
+  if (!aoiGeom) return [];
+  let feats=[]; try{ feats=map.querySourceFeatures('composite',{sourceLayer:'building'})||[]; }catch(e){ feats=map.queryRenderedFeatures(); }
+  return feats.filter(f=>{
+    const g=f.geometry, t=g?.type; if (t!=='Polygon'&&t!=='MultiPolygon') return false;
+    const p=f.properties||{}; const ok=('building'in p)||('type'in p)||('height'in p)||('levels'in p)||('building:levels'in p);
+    if(!ok) return false;
+    try{ return turf.booleanIntersects({type:'Feature',geometry:g}, aoiGeom);}catch(_){return true;}
+  });
 }
 
-/* ========= Generate POI ========= */
-async function generatePOIFromOSMB(){
+/* ========================= SNAP MODES ========================= */
+let SNAP_MODE = 'polylabel'; // 'polylabel' | 'centroid' | 'pointon'
+document.getElementById('snapMode').addEventListener('change', e=>{ SNAP_MODE = e.target.value; });
+
+function largestPolygon(geom){
+  // For MultiPolygon: pick polygon with largest area
+  if (geom.type==='Polygon') return geom;
+  if (geom.type==='MultiPolygon'){
+    let best=null, bestA=-1;
+    geom.coordinates.forEach(coords=>{
+      const poly={type:'Polygon',coordinates:coords};
+      const a=turf.area({type:'Feature',geometry:poly});
+      if (a>bestA){bestA=a; best=poly;}
+    });
+    return best || {type:'Polygon',coordinates:geom.coordinates[0]};
+  }
+  return null;
+}
+function snapPoint(geom){
+  // 1) polylabel if available
+  if (SNAP_MODE==='polylabel' && typeof turf.polylabel==='function'){
+    const poly = largestPolygon(geom);
+    try {
+      const p = turf.polylabel(poly, 1.0); // precision 1m
+      if (p && p.geometry) return p;
+    } catch(e){}
+  }
+  // 2) center of mass
+  if (SNAP_MODE==='centroid'){
+    try { return turf.centerOfMass({type:'Feature',geometry:geom}); } catch(e){}
+  }
+  // 3) fallback: point on feature (selalu di dalam)
+  try { return turf.pointOnFeature({type:'Feature',geometry:geom}); } catch(e){ return null; }
+}
+function resolveHeight(props){ const h=Number(props?.height); if (isFinite(h)&&h>0) return h; const lv=Number(props?.levels||props?.['building:levels']); return (isFinite(lv)&&lv>0)?lv*3:null; }
+
+/* ========================= GENERATORS ========================= */
+async function generatePOIFromOSMB(feats){
   await waitForIdleOnce();
-  const feats = getBuildingsInView();
-  if (!feats.length){ alert('Tidak ada bangunan di view. Zoom ≥14 atau pindah area.'); return; }
+  const canvas=map.getCanvas(); let added=0;
 
-  let added=0, canvas = map.getCanvas();
   for (const f of feats){
-    const c = safeCenterPoint(f.geometry); if (!c) continue;
-    const [lon,lat] = c.geometry.coordinates;
-    const pt = map.project([lon,lat]); if (pt.x<0||pt.y<0||pt.x>canvas.width||pt.y>canvas.height) continue;
+    const sp=snapPoint(f.geometry); if(!sp) continue;
+    const [lon,lat]=sp.geometry.coordinates;
+    const pt=map.project([lon,lat]); if(pt.x<0||pt.y<0||pt.x>canvas.width||pt.y>canvas.height) continue;
 
     const p=f.properties||{}, name=p.name||'', type=p.type||p.building||'', height=resolveHeight(p);
-    const key = keyLonLat(lon,lat); if (poiIndex.has(key)) continue;
+    const key=keyLonLat(lon,lat); if (poiIndex.has(key)) continue;
 
     poiIndex.add(key);
-    poiAll.push({ type:'Feature', geometry:{type:'Point',coordinates:[lon,lat]},
-      properties:{ id:makeId(), name, type, height:isFinite(height)?height:null, source:'osmb' } });
+    poiAll.push({type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},
+      properties:{id:makeId(),name,type,height:isFinite(height)?height:null,source:'osmb'}});
     added++;
   }
   setSourceData(SRC_POI_ALL, poiAll);
-  applyAoiFilter(false); // refresh table using current mode
-  if (!added) alert('POI tidak bertambah (kemungkinan area ini sudah disapu).');
+  applyAoiFilter(false);
+  if (!added) alert('POI tidak bertambah (mungkin area ini sudah pernah diambil).');
 }
 
-/* ========= AOI handling ========= */
+async function generateInView(){ const feats=getBuildingsInView(); if(!feats.length){alert('Tidak ada bangunan di view. Zoom ≥14 atau pindah area.'); return;} await generatePOIFromOSMB(feats); }
+async function generateInAOI(){
+  if (!aoiGeom){ alert('Gambar AOI dulu, lalu klik AOI-only Generate.'); return; }
+  const feats=getBuildingsInAOI(); if(!feats.length){ alert('Tidak ada bangunan yang memotong AOI.'); return; }
+  await generatePOIFromOSMB(feats);
+}
+
+/* ========================= AOI & FILTER ========================= */
 function getAoiFeature(){
-  const all = Draw.getAll();
-  if (!all.features.length) return null;
+  const all=Draw.getAll(); if(!all.features.length) return null;
   if (all.features.length===1) return all.features[0];
-  // jika banyak polygon, gabungkan (union sederhana pakai bbox clip; aman: cek per titik)
-  return { type:'Feature', geometry: { type:'MultiPolygon', coordinates: all.features.map(f=>f.geometry.coordinates).flat() }, properties:{} };
+  return { type:'Feature', geometry:{ type:'MultiPolygon', coordinates: all.features.map(f=>f.geometry.coordinates).flat() }, properties:{} };
 }
 function pointInAoi(ft){
   if (!aoiGeom) return true;
   try { return turf.booleanPointInPolygon(ft, aoiGeom); } catch(e){ return true; }
 }
-function getVisiblePoiList(){
-  const list = aoiFilterOn && aoiGeom ? poiAll.filter(ft=>pointInAoi(ft)) : poiAll;
-  return list;
-}
+function getVisiblePoiList(){ return (aoiFilterOn && aoiGeom) ? poiAll.filter(ft=>pointInAoi(ft)) : poiAll; }
 function applyAoiFilter(toggle=true){
-  if (toggle) aoiFilterOn = !aoiFilterOn;
-  let visible = getVisiblePoiList();
-
-  // tampilkan AOI-poi layer saat filter on
-  const vis = aoiFilterOn ? 'visible' : 'none';
-  map.setLayoutProperty(LYR_POI_DOTS_AOI, 'visibility', vis);
-  map.setLayoutProperty(LYR_POI_LABEL_AOI,'visibility', vis);
-
-  // set data
+  if (toggle) aoiFilterOn=!aoiFilterOn;
+  const visible=getVisiblePoiList();
+  const vis=aoiFilterOn?'visible':'none';
+  map.setLayoutProperty(LYR_POI_DOTS_AOI,'visibility',vis);
+  map.setLayoutProperty(LYR_POI_LABEL_AOI,'visibility',vis);
   if (aoiFilterOn){
     setSourceData(SRC_POI_AOI, visible);
-    // sembunyikan layer ALL agar fokus ke AOI
-    map.setLayoutProperty(LYR_POI_DOTS_ALL, 'visibility', 'none');
-    map.setLayoutProperty(LYR_POI_LABEL_ALL,'visibility', 'none');
-    // tone-down buildings
-    map.setPaintProperty('3d-buildings', 'fill-extrusion-opacity', 0.7);
+    map.setLayoutProperty(LYR_POI_DOTS_ALL,'visibility','none');
+    map.setLayoutProperty(LYR_POI_LABEL_ALL,'visibility','none');
+    if (map.getLayer('3d-buildings')) map.setPaintProperty('3d-buildings','fill-extrusion-opacity',0.65);
   } else {
-    // tampilkan ALL kembali
-    map.setLayoutProperty(LYR_POI_DOTS_ALL, 'visibility', 'visible');
-    map.setLayoutProperty(LYR_POI_LABEL_ALL,'visibility', 'visible');
-    setSourceData(SRC_POI_AOI, []); // kosongkan
-    map.setPaintProperty('3d-buildings', 'fill-extrusion-opacity', 0.9);
+    map.setLayoutProperty(LYR_POI_DOTS_ALL,'visibility','visible');
+    map.setLayoutProperty(LYR_POI_LABEL_ALL,'visibility','visible');
+    setSourceData(SRC_POI_AOI, []);
+    if (map.getLayer('3d-buildings')) map.setPaintProperty('3d-buildings','fill-extrusion-opacity',0.9);
   }
   refreshCounters(visible);
 }
 
-/* ========= Export / Import ========= */
-function rowsFrom(list){
-  return list.map((ft,i)=>({
-    id: ft.properties?.id || i+1,
-    name: ft.properties?.name || '',
-    type: ft.properties?.type || '',
-    height: ft.properties?.height ?? '',
-    lon: ft.geometry.coordinates[0],
-    lat: ft.geometry.coordinates[1],
-    source: ft.properties?.source || ''
-  }));
-}
+/* ========================= EXPORT / IMPORT / TABLE ========================= */
+function rowsFrom(list){ return list.map((ft,i)=>({ id:ft.properties?.id||i+1, name:ft.properties?.name||'', type:ft.properties?.type||'', height:ft.properties?.height??'', lon:ft.geometry.coordinates[0], lat:ft.geometry.coordinates[1], source:ft.properties?.source||'' })); }
 function exportXLSX(){ const list=getVisiblePoiList(); const ws=XLSX.utils.json_to_sheet(rowsFrom(list)); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'POI'); XLSX.writeFile(wb,'poi_visible.xlsx'); }
 function exportCSV(){  const list=getVisiblePoiList(); const ws=XLSX.utils.json_to_sheet(rowsFrom(list)); const csv=XLSX.utils.sheet_to_csv(ws); downloadBlob(csv,'poi_visible.csv','text/csv;charset=utf-8;'); }
 function exportGeoJSON(){ const list=getVisiblePoiList(); downloadBlob(JSON.stringify(fc(list)),'poi_visible.geojson','application/geo+json'); }
 function downloadBlob(content, filename, type){ const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
 async function importXLSX(file){
-  const data = await file.arrayBuffer(); const wb=XLSX.read(data); const ws=wb.Sheets[wb.SheetNames[0]]; const json=XLSX.utils.sheet_to_json(ws,{defval:''});
+  const data=await file.arrayBuffer(); const wb=XLSX.read(data); const ws=wb.Sheets[wb.SheetNames[0]]; const json=XLSX.utils.sheet_to_json(ws,{defval:''});
   let added=0;
   for (const r of json){
     const lon=Number(r.lon??r.longitude??r.x??r.lng), lat=Number(r.lat??r.latitude??r.y);
     if (!isFinite(lon)||!isFinite(lat)) continue;
     const key=keyLonLat(lon,lat); if (poiIndex.has(key)) continue;
     poiIndex.add(key);
-    poiAll.push({type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},properties:{
-      id:String(r.id||makeId()), name:String(r.name||''), type:String(r.type||''), height:r.height!==''?Number(r.height):null, source:String(r.source||'import(xlsx)')}
-    });
+    poiAll.push({type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},properties:{ id:String(r.id||makeId()), name:String(r.name||''), type:String(r.type||''), height:r.height!==''?Number(r.height):null, source:String(r.source||'import(xlsx)') }});
     added++;
   }
-  setSourceData(SRC_POI_ALL, poiAll);
-  applyAoiFilter(false);
-  alert(`Import selesai. Ditambahkan: ${added} POI.`);
+  setSourceData(SRC_POI_ALL, poiAll); applyAoiFilter(false); alert(`Import selesai. Ditambahkan: ${added} POI.`);
 }
-
-/* ========= Table + UI ========= */
 function renderPreviewTable(list){
-  const tbody = document.querySelector('#poiTable tbody'); tbody.innerHTML='';
-  list.forEach((ft,i)=>{
-    const p=ft.properties||{}, [lon,lat]=ft.geometry.coordinates;
-    const tr=document.createElement('tr');
-    tr.innerHTML = `<td>${i+1}</td><td title="${p.name||''}">${p.name||''}</td><td>${p.type||''}</td><td>${p.height??''}</td><td>${lon.toFixed(6)}</td><td>${lat.toFixed(6)}</td>`;
-    tr.style.cursor='pointer'; tr.onclick=()=>map.easeTo({center:[lon,lat],zoom:18,pitch:60});
-    tbody.appendChild(tr);
+  const tbody=document.querySelector('#poiTable tbody'); tbody.innerHTML='';
+  list.forEach((ft,i)=>{ const p=ft.properties||{},[lon,lat]=ft.geometry.coordinates; const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${i+1}</td><td title="${p.name||''}">${p.name||''}</td><td>${p.type||''}</td><td>${p.height??''}</td><td>${lon.toFixed(6)}</td><td>${lat.toFixed(6)}</td>`;
+    tr.style.cursor='pointer'; tr.onclick=()=>map.easeTo({center:[lon,lat],zoom:18,pitch:60}); tbody.appendChild(tr);
   });
 }
-document.getElementById('genPoiBtn').addEventListener('click', generatePOIFromOSMB);
+
+/* ========================= UI HOOKS ========================= */
+document.getElementById('genPoiBtn').addEventListener('click', generateInView);
+document.getElementById('genAoiBtn').addEventListener('click', generateInAOI);
 document.getElementById('expXlsxBtn').addEventListener('click', exportXLSX);
 document.getElementById('expCsvBtn').addEventListener('click', exportCSV);
 document.getElementById('expGeoJsonBtn').addEventListener('click', exportGeoJSON);
 document.getElementById('clearBtn').addEventListener('click', ()=>{
   if (!confirm('Hapus semua POI?')) return;
-  poiAll=[]; poiIndex.clear();
-  setSourceData(SRC_POI_ALL, poiAll); setSourceData(SRC_POI_AOI, []);
-  aoiGeom=null; aoiFilterOn=false; map.setLayoutProperty(LYR_POI_DOTS_AOI,'visibility','none'); map.setLayoutProperty(LYR_POI_LABEL_AOI,'visibility','none');
-  map.setLayoutProperty(LYR_POI_DOTS_ALL,'visibility','visible'); map.setLayoutProperty(LYR_POI_LABEL_ALL,'visibility','visible');
-  refreshCounters(getVisiblePoiList());
+  poiAll=[]; poiIndex.clear(); setSourceData(SRC_POI_ALL, poiAll); setSourceData(SRC_POI_AOI, []);
+  aoiGeom=null; aoiFilterOn=false; refreshCounters(getVisiblePoiList());
 });
 document.getElementById('impXlsxInput').addEventListener('change', e=>{ const f=e.target.files?.[0]; if(f) importXLSX(f); e.target.value=''; });
 
-document.getElementById('drawAoiBtn').addEventListener('click', ()=>{
-  // toggle antara draw polygon dan select
-  const mode = Draw.getMode();
-  Draw.changeMode(mode==='draw_polygon' ? 'simple_select' : 'draw_polygon');
-});
-document.getElementById('applyAoiBtn').addEventListener('click', ()=>{
-  aoiGeom = getAoiFeature()?.geometry || null;
-  applyAoiFilter(true);
-});
-document.getElementById('clearAoiBtn').addEventListener('click', ()=>{
-  Draw.deleteAll(); aoiGeom=null; if (aoiFilterOn) applyAoiFilter(true); // toggle off
+document.getElementById('drawAoiBtn').addEventListener('click', ()=>{ const mode=Draw.getMode(); Draw.changeMode(mode==='draw_polygon'?'simple_select':'draw_polygon'); });
+document.getElementById('applyAoiBtn').addEventListener('click', ()=>{ aoiGeom=getAoiFeature()?.geometry||null; applyAoiFilter(true); });
+document.getElementById('clearAoiBtn').addEventListener('click', ()=>{ Draw.deleteAll(); aoiGeom=null; if (aoiFilterOn) applyAoiFilter(true); });
+document.getElementById('toggleBldBtn').addEventListener('click', ()=>{
+  const now = buildingsVisible; setBuildingsVisibility(now?'none':'visible');
+  document.getElementById('toggleBldBtn').textContent = 'Buildings: ' + (now ? 'Show' : 'Hide');
 });
 
-map.on('draw.create', ()=>{ aoiGeom = getAoiFeature()?.geometry || null; });
-map.on('draw.update', ()=>{ aoiGeom = getAoiFeature()?.geometry || null; });
+map.on('draw.create', ()=>{ aoiGeom=getAoiFeature()?.geometry||null; });
+map.on('draw.update', ()=>{ aoiGeom=getAoiFeature()?.geometry||null; });
 
 map.on('moveend', updateViewInfo);
-function updateViewInfo(){
-  const b = map.getBounds();
-  const dx = (b.getEast()-b.getWest()).toFixed(4);
-  const dy = (b.getNorth()-b.getSouth()).toFixed(4);
-  document.getElementById('viewInfo').textContent = `Δlon ${dx} • Δlat ${dy}`;
-}
+function updateViewInfo(){ const b=map.getBounds(); const dx=(b.getEast()-b.getWest()).toFixed(4); const dy=(b.getNorth()-b.getSouth()).toFixed(4); document.getElementById('viewInfo').textContent=`Δlon ${dx} • Δlat ${dy}`; }
 
-/* ========= Chat (rule-based) ========= */
-const chatBody = document.getElementById('chatBody');
-const chatInput= document.getElementById('chatInput');
-const sendBtn  = document.getElementById('send');
+/* ========================= CHAT RULE-BASED ========================= */
+const chatBody=document.getElementById('chatBody'); const chatInput=document.getElementById('chatInput'); const sendBtn=document.getElementById('send');
 function addMsg(t,who='bot'){ const d=document.createElement('div'); d.className=`msg ${who}`; d.innerHTML=`<div class="bub">${t}</div>`; chatBody.appendChild(d); chatBody.scrollTop=chatBody.scrollHeight; }
 function parseCommand(s){
   const tl=s.trim().toLowerCase();
   if (tl==='help'||tl==='/help') return {a:'help'};
   if (tl==='generate') return {a:'gen'};
-  if (tl==='clear') return {a:'clear'};
+  if (tl==='aoi generate') return {a:'gen_aoi'};
   if (tl==='aoi apply') return {a:'aoi_apply'};
   if (tl==='aoi clear') return {a:'aoi_clear'};
+  if (tl==='buildings hide') return {a:'bld',v:'hide'};
+  if (tl==='buildings show') return {a:'bld',v:'show'};
+  const mSnap=tl.match(/^snap\s+(polylabel|centroid|pointon)$/); if (mSnap) return {a:'snap',v:mSnap[1]};
+  if (tl==='clear') return {a:'clear'};
   if (/^export\s+(csv|xlsx|geojson)$/.test(tl)) return {a:'export',fmt:tl.split(/\s+/)[1]};
   if (/^fly\s+petronas$/.test(tl)) return {a:'fly'};
   const m = tl.match(/^style\s+(satellite|dark|light|standard)$/); if (m) return {a:'style',v:m[1]};
@@ -452,24 +418,24 @@ function parseCommand(s){
 }
 function handleCommand(cmd){
   switch(cmd.a){
-    case 'help': addMsg('generate | aoi apply | aoi clear | export csv|xlsx|geojson | clear | fly petronas | style satellite|dark|light|standard'); break;
-    case 'gen': generatePOIFromOSMB(); addMsg('Generate POI dari bangunan di view…'); break;
+    case 'help': addMsg('generate | aoi generate | aoi apply | aoi clear | buildings hide/show | snap polylabel|centroid|pointon | export csv|xlsx|geojson | clear | fly petronas | style satellite|dark|light|standard'); break;
+    case 'gen': generateInView(); addMsg('Generate dari view…'); break;
+    case 'gen_aoi': generateInAOI(); addMsg('Generate khusus AOI…'); break;
     case 'aoi_apply': aoiGeom=getAoiFeature()?.geometry||null; applyAoiFilter(true); addMsg('AOI filter toggled.'); break;
     case 'aoi_clear': Draw.deleteAll(); aoiGeom=null; if (aoiFilterOn) applyAoiFilter(true); addMsg('AOI cleared.'); break;
+    case 'bld': setBuildingsVisibility(cmd.v==='hide'?'none':'visible'); addMsg('Buildings: '+cmd.v); break;
+    case 'snap': SNAP_MODE=cmd.v; (document.getElementById('snapMode').value=cmd.v); addMsg('Snap mode: '+cmd.v); break;
     case 'clear':
-      poiAll=[]; poiIndex.clear(); setSourceData(SRC_POI_ALL, poiAll); setSourceData(SRC_POI_AOI, []); aoiGeom=null; aoiFilterOn=false;
-      map.setLayoutProperty(LYR_POI_DOTS_AOI,'visibility','none'); map.setLayoutProperty(LYR_POI_LABEL_AOI,'visibility','none');
-      map.setLayoutProperty(LYR_POI_DOTS_ALL,'visibility','visible'); map.setLayoutProperty(LYR_POI_LABEL_ALL,'visibility','visible');
-      refreshCounters(getVisiblePoiList()); addMsg('Semua POI dihapus.'); break;
+      poiAll=[]; poiIndex.clear(); setSourceData(SRC_POI_ALL, poiAll); setSourceData(SRC_POI_AOI, []); aoiGeom=null; aoiFilterOn=false; refreshCounters(getVisiblePoiList()); addMsg('Semua POI dihapus.');
+      break;
     case 'export':
       if (cmd.fmt==='csv') exportCSV(); else if (cmd.fmt==='xlsx') exportXLSX(); else exportGeoJSON();
-      addMsg(`Export ${cmd.fmt} dari tampilan saat ini.`); break;
-    case 'fly':
-      map.flyTo({ center: PETRONAS, zoom: 17.2, pitch: 72, bearing: 20, speed:0.6, curve:1.2 }); addMsg('Kamera ke Petronas.'); break;
+      addMsg(`Export ${cmd.fmt} (berdasarkan tampilan saat ini).`); break;
+    case 'fly': map.flyTo({ center: PETRONAS, zoom: 17.2, pitch: 72, bearing: 20, speed:0.6, curve:1.2 }); addMsg('Kamera ke Petronas.'); break;
     case 'style':
-      const mapStyle = { satellite:'mapbox://styles/mapbox/satellite-streets-v12', dark:'mapbox://styles/mapbox/dark-v11', light:'mapbox://styles/mapbox/light-v11', standard:'mapbox://styles/mapbox/standard' }[cmd.v];
+      const mapStyle={ satellite:'mapbox://styles/mapbox/satellite-streets-v12', dark:'mapbox://styles/mapbox/dark-v11', light:'mapbox://styles/mapbox/light-v11', standard:'mapbox://styles/mapbox/standard' }[cmd.v];
       map.setStyle(mapStyle);
-      map.once('style.load', ()=>{ ensure3DBuildingsLayer(); ensurePoiSourcesAndLayers(); setSourceData(SRC_POI_ALL, poiAll); applyAoiFilter(false); });
+      map.once('style.load', ()=>{ ensure3DBuildingsLayer(); ensurePoiSourcesAndLayers(); setSourceData(SRC_POI_ALL, poiAll); applyAoiFilter(false); setBuildingsVisibility(buildingsVisible?'visible':'none'); });
       addMsg(`Style: ${cmd.v}.`); break;
     default: addMsg('Tidak paham. Ketik: help');
   }
