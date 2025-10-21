@@ -50,11 +50,24 @@
 
     .chip{display:inline-flex;align-items:center;gap:6px}
     .toggle{display:inline-flex;align-items:center;gap:8px}
+    /* Chat mini */
+.chat{position:absolute;left:12px;bottom:12px;width:360px;max-width:calc(100% - 24px);background:rgba(20,20,24,.95);
+  color:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;z-index:10}
+.chat-h{padding:10px 12px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between}
+.chat-b{padding:10px;height:160px;overflow:auto;font-size:12px}
+.msg{margin:6px 0}.msg.me{text-align:right}.msg .bub{display:inline-block;padding:8px 10px;border-radius:10px;max-width:90%}
+.msg.me .bub{background:#2563eb}.msg.bot .bub{background:#374151}
+.chat-i{display:flex;gap:6px;padding:8px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.2)}
+.chat-i input{flex:1;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0f172a;color:#fff}
+.chat-i button{padding:8px 12px;border:none;border-radius:8px;background:#22c55e;color:#052e16;font-weight:700}
+.badge{display:inline-block;padding:2px 6px;border-radius:6px;background:#0ea5e9;color:#03202a;font-weight:700;font-size:11px}
+
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  
   <div class="panel">
     <div class="panel-h">
       <span>SIGEO AI — POI Editor</span>
@@ -127,6 +140,24 @@
       </div>
     </div>
   </div>
+
+  <!-- Chat rule-based -->
+<div class="chat">
+  <div class="chat-h"><span>AI (Rule-Based)</span><span class="badge">/help</span></div>
+  <div class="chat-b" id="chatBody">
+    <div class="msg bot"><div class="bub">
+      Perintah: <i>generate</i>, <i>aoi generate</i>, <i>aoi apply</i>, <i>aoi clear</i>,
+      <i>buildings hide</i>/<i>buildings show</i>, <i>snap polylabel|centroid|pointon</i>,
+      <i>add on</i>/<i>add off</i>, <i>export xlsx</i>/<i>export geojson</i>,
+      <i>style satellite|dark|light|standard</i>, <i>fly petronas</i>, <i>help</i>.
+    </div></div>
+  </div>
+  <div class="chat-i">
+    <input id="chatInput" placeholder="Type command…" />
+    <button id="send">Send</button>
+  </div>
+</div>
+
 
 <script>
 /* ========================= SETUP MAP ========================= */
@@ -560,6 +591,99 @@ map.on('click', LYR_POI_DOTS_ALL, (e)=>{
 function escapeKeyCloseEdit(){/* inline, handled by blur/enter */}
 
 /* ========================= FIN ========================= */
+
+  /* ========================= CHAT RULE-BASED (restore) ========================= */
+const chatBodyEl = document.getElementById('chatBody');
+const chatInputEl= document.getElementById('chatInput');
+const sendBtnEl  = document.getElementById('send');
+
+function addMsg(t,who='bot'){
+  const d=document.createElement('div'); d.className=`msg ${who}`;
+  d.innerHTML=`<div class="bub">${t}</div>`; chatBodyEl.appendChild(d);
+  chatBodyEl.scrollTop=chatBodyEl.scrollHeight;
+}
+
+function parseCommand(s){
+  const tl=s.trim().toLowerCase();
+  if (!tl) return {a:'noop'};
+  if (tl==='help'||tl==='/help') return {a:'help'};
+  if (tl==='generate') return {a:'gen_view'};
+  if (tl==='aoi generate') return {a:'gen_aoi'};
+  if (tl==='aoi apply') return {a:'aoi_apply'};
+  if (tl==='aoi clear') return {a:'aoi_clear'};
+  if (tl==='buildings hide') return {a:'bld',v:'hide'};
+  if (tl==='buildings show') return {a:'bld',v:'show'};
+  const mSnap=tl.match(/^snap\s+(polylabel|centroid|pointon)$/); if (mSnap) return {a:'snap',v:mSnap[1]};
+  if (tl==='add on') return {a:'add',v:true};
+  if (tl==='add off') return {a:'add',v:false};
+  if (tl==='export xlsx') return {a:'exp',v:'xlsx'};
+  if (tl==='export geojson') return {a:'exp',v:'geojson'};
+  if (/^style\s+(satellite|dark|light|standard)$/.test(tl)) return {a:'style',v:tl.split(' ')[1]};
+  if (tl==='fly petronas') return {a:'fly'};
+  return {a:'unknown',raw:s};
+}
+
+function handleCommand(cmd){
+  switch(cmd.a){
+    case 'help':
+      addMsg('generate | aoi generate | aoi apply | aoi clear | buildings hide/show | snap polylabel|centroid|pointon | add on/off | export xlsx|geojson | style satellite|dark|light|standard | fly petronas');
+      break;
+    case 'gen_view':
+      generateInView(); addMsg('Generate dari view…'); break;
+    case 'gen_aoi':
+      generateInAOI(); addMsg('Generate khusus AOI…'); break;
+    case 'aoi_apply':
+      aoiGeom = (typeof getAoiFeature==='function' ? getAoiFeature()?.geometry : aoiGeom) || aoiGeom;
+      applyAoiFilter(true); addMsg('AOI filter toggled.'); break;
+    case 'aoi_clear':
+      Draw.deleteAll(); aoiGeom=null; if (aoiFilterOn) applyAoiFilter(true); addMsg('AOI cleared.'); break;
+    case 'bld':
+      setBuildingsVisibility(cmd.v==='hide'?'none':'visible');
+      addMsg('Buildings: '+cmd.v); break;
+    case 'snap':
+      SNAP_MODE=cmd.v; const sel=document.getElementById('snapMode'); if (sel) sel.value=cmd.v;
+      addMsg('Snap mode: '+cmd.v); break;
+    case 'add':
+      addMode = !!cmd.v; const chk=document.getElementById('addMode'); if (chk) chk.checked=addMode;
+      addMsg('Add Mode: '+(addMode?'ON':'OFF')); break;
+    case 'exp':
+      if (cmd.v==='xlsx') exportXLSX(); else exportGeoJSON();
+      addMsg('Export '+cmd.v+' (berdasarkan tampilan saat ini).'); break;
+    case 'style': {
+      const styles={
+        satellite:'mapbox://styles/mapbox/satellite-streets-v12',
+        dark:'mapbox://styles/mapbox/dark-v11',
+        light:'mapbox://styles/mapbox/light-v11',
+        standard:'mapbox://styles/mapbox/standard'
+      };
+      map.setStyle(styles[cmd.v]);
+      map.once('style.load', ()=>{
+        ensure3DBuildingsLayer();
+        ensurePoiSourcesAndLayers();
+        setSourceData(SRC_POI_ALL, poiAll);
+        applyAoiFilter(false);
+        setBuildingsVisibility(buildingsVisible?'visible':'none');
+      });
+      addMsg('Style: '+cmd.v);
+      break;
+    }
+    case 'fly':
+      map.flyTo({ center: PETRONAS, zoom: 17.2, pitch: 72, bearing: 20, speed:0.6, curve:1.2 });
+      addMsg('Kamera ke Petronas.');
+      break;
+    case 'unknown':
+      addMsg('Tidak paham: <i>'+cmd.raw.replace(/</g,'&lt;')+'</i>. Ketik <b>help</b>.'); break;
+    default: /* noop */ break;
+  }
+}
+
+function onSend(){
+  const t=chatInputEl.value.trim(); if(!t) return;
+  addMsg(t,'me'); chatInputEl.value=''; handleCommand(parseCommand(t));
+}
+sendBtnEl.addEventListener('click', onSend);
+chatInputEl.addEventListener('keydown', e=>{ if(e.key==='Enter') onSend(); });
+
 </script>
 </body>
 </html>
