@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>SIGEO AI • POI + AOI Generate + Hide Buildings + Snap</title>
+  <title>SIGEO AI • POI Editor + AOI + Snap + Import/Export</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <!-- Mapbox GL -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet" />
@@ -10,7 +10,7 @@
   <!-- Mapbox GL Draw -->
   <link href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.css" rel="stylesheet"/>
   <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-draw/v1.5.0/mapbox-gl-draw.js"></script>
-  <!-- Turf (include polylabel) -->
+  <!-- Turf -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
   <!-- SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -19,40 +19,37 @@
     #map{position:absolute;inset:0}
 
     .panel{
-      position:absolute; z-index:10; right:12px; top:12px; width:420px; max-width:calc(100% - 24px);
-      background:rgba(20,20,24,.95); color:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.25);
-      display:flex; flex-direction:column; overflow:hidden;
+      position:absolute;z-index:10;right:12px;top:12px;width:520px;max-width:calc(100% - 24px);
+      background:rgba(20,20,24,.95);color:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25);
+      display:flex;flex-direction:column;overflow:hidden
     }
     .panel-h{padding:10px 12px;font-weight:700;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between;align-items:center}
-    .panel-b{padding:12px; font-size:13px}
-    .row{display:flex; gap:8px; flex-wrap:wrap; margin:8px 0}
-    .row > * { flex:1 }
+    .panel-b{padding:12px;font-size:13px}
+    .row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+    .row>*{flex:1}
     .btn{appearance:none;border:none;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;background:#22c55e;color:#052e16}
     .btn.secondary{background:#0ea5e9;color:#03202a}
     .btn.warn{background:#ef4444;color:#2d0707}
     .btn.dark{background:#374151;color:#d1d5db}
     .btn.outline{background:transparent;border:1px solid rgba(255,255,255,.25);color:#e5e7eb}
-    select{background:#111827;color:#e5e7eb;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px}
+    select, input[type="text"]{background:#111827;color:#e5e7eb;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:8px}
     .stat{display:flex;gap:12px;align-items:center;margin:6px 0}
     .stat b{font-size:16px}
-    .hint{opacity:.85}
-    table{width:100%; border-collapse:collapse; margin-top:8px; font-size:12px}
-    th,td{border-bottom:1px solid rgba(255,255,255,.08); padding:6px 4px; text-align:left; white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-    th{opacity:.8}
-    .small{font-size:11px; opacity:.8}
-    .file{display:inline-block; padding:8px; border:1px dashed rgba(255,255,255,.2); border-radius:8px; text-align:center}
-
-    /* Chat mini */
-    .chat{position:absolute;left:12px;bottom:12px;width:360px;max-width:calc(100% - 24px);background:rgba(20,20,24,.95);
-      color:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;z-index:10}
-    .chat-h{padding:10px 12px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between}
-    .chat-b{padding:10px;height:160px;overflow:auto;font-size:12px}
-    .msg{margin:6px 0}.msg.me{text-align:right}.msg .bub{display:inline-block;padding:8px 10px;border-radius:10px;max-width:90%}
-    .msg.me .bub{background:#2563eb}.msg.bot .bub{background:#374151}
-    .chat-i{display:flex;gap:6px;padding:8px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.2)}
-    .chat-i input{flex:1;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0f172a;color:#fff}
-    .chat-i button{padding:8px 12px;border:none;border-radius:8px;background:#22c55e;color:#052e16;font-weight:700}
     .badge{display:inline-block;padding:2px 6px;border-radius:6px;background:#0ea5e9;color:#03202a;font-weight:700;font-size:11px}
+
+    .hint{opacity:.85}
+    .table-wrap{border:1px solid rgba(255,255,255,.15);border-radius:10px;overflow:hidden;margin-top:8px}
+    table{width:100%;border-collapse:collapse;font-size:12px}
+    thead{position:sticky;top:0;background:#0b1220;z-index:1}
+    th,td{border-bottom:1px solid rgba(255,255,255,.08);padding:6px 6px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    th{opacity:.9}
+    tbody{display:block;max-height:220px;overflow:auto}
+    thead, tbody tr{display:table;table-layout:fixed;width:100%}
+    td[contenteditable="true"]{background:#0f172a;outline:none;border-radius:4px}
+    td[contenteditable="true"]:focus{box-shadow:0 0 0 2px #2563eb inset}
+
+    .chip{display:inline-flex;align-items:center;gap:6px}
+    .toggle{display:inline-flex;align-items:center;gap:8px}
   </style>
 </head>
 <body>
@@ -60,7 +57,7 @@
 
   <div class="panel">
     <div class="panel-h">
-      <span>SIGEO AI — POI + AOI Only + Snap</span>
+      <span>SIGEO AI — POI Editor</span>
       <span class="badge" id="viewInfo">view: 0×0</span>
     </div>
     <div class="panel-b">
@@ -70,62 +67,64 @@
       </div>
 
       <div class="row">
-        <button class="btn" id="genPoiBtn">Generate POI (in view)</button>
+        <button class="btn" id="genPoiBtn">Generate (in view)</button>
         <button class="btn secondary" id="genAoiBtn">AOI-only Generate</button>
       </div>
 
-      <!-- AOI controls -->
       <div class="row">
         <button class="btn secondary" id="drawAoiBtn">AOI: Draw/Edit</button>
         <button class="btn outline" id="applyAoiBtn">Apply AOI Filter</button>
         <button class="btn dark" id="clearAoiBtn">Clear AOI</button>
       </div>
 
-      <!-- Display controls -->
       <div class="row">
         <button class="btn dark" id="toggleBldBtn">Buildings: Hide</button>
         <select id="snapMode">
-          <option value="polylabel">Snap: Polylabel (visual center)</option>
+          <option value="polylabel">Snap: Polylabel</option>
           <option value="centroid">Snap: Center of Mass</option>
           <option value="pointon">Snap: Point On Feature</option>
         </select>
+        <div class="toggle">
+          <input type="checkbox" id="addMode">
+          <label for="addMode">Add Mode (click map → add POI)</label>
+        </div>
       </div>
 
-      <!-- Export/Import -->
       <div class="row">
         <button class="btn secondary" id="expXlsxBtn">Export XLSX</button>
-        <button class="btn secondary" id="expCsvBtn">Export CSV</button>
         <button class="btn secondary" id="expGeoJsonBtn">Export GeoJSON</button>
-      </div>
-      <div class="row" style="align-items:center">
-        <label class="file" style="flex:2">
+        <label class="btn outline" style="text-align:center;cursor:pointer">
           Import XLSX
           <input type="file" id="impXlsxInput" accept=".xlsx,.xls" style="display:none">
         </label>
-        <button class="btn dark" id="clearBtn" style="flex:1">Clear POI</button>
+        <button class="btn dark" id="clearBtn">Clear POI</button>
       </div>
 
-      <div class="hint small">Tips: untuk “mengikuti citra”, ganti style ke <b>satellite</b> via chat: <i>style satellite</i>. Mode <b>Polylabel</b> akan menempatkan titik di pusat visual atap.</div>
+      <div class="hint">Tabel di bawah bisa discroll & diedit langsung. Tekan Enter atau klik luar sel untuk menyimpan.</div>
 
-      <div style="margin-top:10px; font-weight:700">Preview (top 10 tampilan saat ini)</div>
-      <table id="poiTable">
-        <thead><tr><th>#</th><th>Name</th><th>Type</th><th>Height</th><th>Lon</th><th>Lat</th></tr></thead>
-        <tbody></tbody>
-      </table>
-    </div>
-  </div>
-
-  <!-- Chat rule-based -->
-  <div class="chat">
-    <div class="chat-h"><span>AI (Rule-Based)</span><span class="badge">/help</span></div>
-    <div class="chat-b" id="chatBody">
-      <div class="msg bot"><div class="bub">
-        Perintah: <i>generate</i>, <i>aoi generate</i>, <i>aoi apply</i>, <i>aoi clear</i>, <i>buildings hide</i>/<i>show</i>, <i>snap polylabel|centroid|pointon</i>, <i>export csv|xlsx|geojson</i>, <i>clear</i>, <i>fly petronas</i>, <i>style satellite|dark|light|standard</i>, <i>help</i>.
-      </div></div>
-    </div>
-    <div class="chat-i">
-      <input id="chatInput" placeholder="Type command…" />
-      <button id="send">Send</button>
+      <div class="table-wrap">
+        <table id="poiTable">
+          <thead>
+            <tr>
+              <th style="width:38px">#</th>
+              <th style="width:140px">Name</th>
+              <th style="width:90px">No House</th>
+              <th style="width:120px">Alternate</th>
+              <th style="width:140px">Street</th>
+              <th style="width:70px">L5</th>
+              <th style="width:70px">L4</th>
+              <th style="width:70px">L3</th>
+              <th style="width:70px">L2</th>
+              <th style="width:70px">L1</th>
+              <th style="width:100px">Business Type</th>
+              <th style="width:90px">Lat</th>
+              <th style="width:90px">Long</th>
+              <th style="width:140px">Picture (URL)</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -181,16 +180,24 @@ function setBuildingsVisibility(v){
   buildingsVisible = (v!=='none');
   if (map.getLayer('3d-buildings')) map.setLayoutProperty('3d-buildings','visibility', buildingsVisible?'visible':'none');
 }
+document.getElementById('toggleBldBtn').addEventListener('click', ()=>{
+  const now = buildingsVisible; setBuildingsVisibility(now?'none':'visible');
+  document.getElementById('toggleBldBtn').textContent = 'Buildings: ' + (now ? 'Show' : 'Hide');
+});
 
 /* ========================= HELPERS ========================= */
 function waitForIdleOnce(){ return new Promise(r=>{ map.once('idle', r); map.triggerRepaint && map.triggerRepaint(); }); }
 function keyLonLat(lon, lat){ return `${Number(lon).toFixed(7)},${Number(lat).toFixed(7)}`; }
 function makeId(){ return Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4); }
 function fc(features){ return { type:'FeatureCollection', features }; }
+function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
 
 /* ========================= POI SOURCES/LAYERS ========================= */
-let poiAll = []; const poiIndex = new Set();
+let poiAll = []; const poiIndex = new Set(); // anti-duplikat by lon,lat
 let aoiGeom = null; let aoiFilterOn = false;
+let SNAP_MODE = 'polylabel';
+let addMode = false;
+
 const SRC_POI_ALL='poi-all-src', SRC_POI_AOI='poi-aoi-src';
 const LYR_POI_DOTS_ALL='poi-dots-all', LYR_POI_LABEL_ALL='poi-label-all';
 const LYR_POI_DOTS_AOI='poi-dots-aoi', LYR_POI_LABEL_AOI='poi-label-aoi';
@@ -222,9 +229,9 @@ function ensurePoiSourcesAndLayers(){
   }, LYR_POI_DOTS_AOI);
 }
 function setSourceData(id, features){ const s=map.getSource(id); if (s) s.setData(fc(features)); }
-function refreshCounters(list){ document.getElementById('poiCount').textContent=String(poiAll.length); document.getElementById('aoiCount').textContent=String(list.length); renderPreviewTable(list.slice(0,10)); }
+function refreshCounters(list){ document.getElementById('poiCount').textContent=String(poiAll.length); document.getElementById('aoiCount').textContent=String(list.length); renderTable(list); }
 
-/* ========================= GET BUILDINGS ========================= */
+/* ========================= GET BUILDINGS / AOI ========================= */
 function getBuildingsInView(){
   let feats=[]; try{ feats=map.querySourceFeatures('composite',{sourceLayer:'building'})||[]; }catch(e){ feats=map.queryRenderedFeatures(); }
   const b=map.getBounds(); const vp=turf.bboxPolygon([b.getWest(),b.getSouth(),b.getEast(),b.getNorth()]);
@@ -246,12 +253,9 @@ function getBuildingsInAOI(){
   });
 }
 
-/* ========================= SNAP MODES ========================= */
-let SNAP_MODE = 'polylabel'; // 'polylabel' | 'centroid' | 'pointon'
+/* ========================= SNAP ========================= */
 document.getElementById('snapMode').addEventListener('change', e=>{ SNAP_MODE = e.target.value; });
-
 function largestPolygon(geom){
-  // For MultiPolygon: pick polygon with largest area
   if (geom.type==='Polygon') return geom;
   if (geom.type==='MultiPolygon'){
     let best=null, bestA=-1;
@@ -265,25 +269,17 @@ function largestPolygon(geom){
   return null;
 }
 function snapPoint(geom){
-  // 1) polylabel if available
   if (SNAP_MODE==='polylabel' && typeof turf.polylabel==='function'){
     const poly = largestPolygon(geom);
-    try {
-      const p = turf.polylabel(poly, 1.0); // precision 1m
-      if (p && p.geometry) return p;
-    } catch(e){}
+    try { const p = turf.polylabel(poly, 1.0); if (p && p.geometry) return p; } catch(e){}
   }
-  // 2) center of mass
-  if (SNAP_MODE==='centroid'){
-    try { return turf.centerOfMass({type:'Feature',geometry:geom}); } catch(e){}
-  }
-  // 3) fallback: point on feature (selalu di dalam)
+  if (SNAP_MODE==='centroid'){ try { return turf.centerOfMass({type:'Feature',geometry:geom}); } catch(e){} }
   try { return turf.pointOnFeature({type:'Feature',geometry:geom}); } catch(e){ return null; }
 }
-function resolveHeight(props){ const h=Number(props?.height); if (isFinite(h)&&h>0) return h; const lv=Number(props?.levels||props?.['building:levels']); return (isFinite(lv)&&lv>0)?lv*3:null; }
+function resolveHeight(p){ const h=Number(p?.height); if (isFinite(h)&&h>0) return h; const lv=Number(p?.levels||p?.['building:levels']); return (isFinite(lv)&&lv>0)?lv*3:null; }
 
-/* ========================= GENERATORS ========================= */
-async function generatePOIFromOSMB(feats){
+/* ========================= GENERATE ========================= */
+async function generateFromFeatures(feats){
   await waitForIdleOnce();
   const canvas=map.getCanvas(); let added=0;
 
@@ -291,25 +287,29 @@ async function generatePOIFromOSMB(feats){
     const sp=snapPoint(f.geometry); if(!sp) continue;
     const [lon,lat]=sp.geometry.coordinates;
     const pt=map.project([lon,lat]); if(pt.x<0||pt.y<0||pt.x>canvas.width||pt.y>canvas.height) continue;
-
-    const p=f.properties||{}, name=p.name||'', type=p.type||p.building||'', height=resolveHeight(p);
-    const key=keyLonLat(lon,lat); if (poiIndex.has(key)) continue;
-
-    poiIndex.add(key);
-    poiAll.push({type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},
-      properties:{id:makeId(),name,type,height:isFinite(height)?height:null,source:'osmb'}});
+    const p=f.properties||{};
+    addPoi({
+      lon, lat,
+      name: p.name||'',
+      no_house: p['addr:housenumber'] || '',
+      alternate: '',
+      street: p['addr:street'] || '',
+      l5:'', l4:'', l3:'', l2:'', l1:'',
+      business_type: p['amenity'] || p['shop'] || '',
+      picture:'', height: resolveHeight(p)
+    }, false);
     added++;
   }
   setSourceData(SRC_POI_ALL, poiAll);
   applyAoiFilter(false);
-  if (!added) alert('POI tidak bertambah (mungkin area ini sudah pernah diambil).');
+  if (!added) alert('POI tidak bertambah (kemungkinan area ini sudah pernah diambil).');
 }
 
-async function generateInView(){ const feats=getBuildingsInView(); if(!feats.length){alert('Tidak ada bangunan di view. Zoom ≥14 atau pindah area.'); return;} await generatePOIFromOSMB(feats); }
+async function generateInView(){ const feats=getBuildingsInView(); if(!feats.length){alert('Tidak ada bangunan di view. Zoom ≥14 atau pindah area.'); return;} await generateFromFeatures(feats); }
 async function generateInAOI(){
-  if (!aoiGeom){ alert('Gambar AOI dulu, lalu klik AOI-only Generate.'); return; }
+  if (!aoiGeom){ alert('Gambar AOI dulu.'); return; }
   const feats=getBuildingsInAOI(); if(!feats.length){ alert('Tidak ada bangunan yang memotong AOI.'); return; }
-  await generatePOIFromOSMB(feats);
+  await generateFromFeatures(feats);
 }
 
 /* ========================= AOI & FILTER ========================= */
@@ -318,10 +318,7 @@ function getAoiFeature(){
   if (all.features.length===1) return all.features[0];
   return { type:'Feature', geometry:{ type:'MultiPolygon', coordinates: all.features.map(f=>f.geometry.coordinates).flat() }, properties:{} };
 }
-function pointInAoi(ft){
-  if (!aoiGeom) return true;
-  try { return turf.booleanPointInPolygon(ft, aoiGeom); } catch(e){ return true; }
-}
+function pointInAoi(ft){ if (!aoiGeom) return true; try { return turf.booleanPointInPolygon(ft, aoiGeom); } catch(e){ return true; } }
 function getVisiblePoiList(){ return (aoiFilterOn && aoiGeom) ? poiAll.filter(ft=>pointInAoi(ft)) : poiAll; }
 function applyAoiFilter(toggle=true){
   if (toggle) aoiFilterOn=!aoiFilterOn;
@@ -343,38 +340,184 @@ function applyAoiFilter(toggle=true){
   refreshCounters(visible);
 }
 
-/* ========================= EXPORT / IMPORT / TABLE ========================= */
-function rowsFrom(list){ return list.map((ft,i)=>({ id:ft.properties?.id||i+1, name:ft.properties?.name||'', type:ft.properties?.type||'', height:ft.properties?.height??'', lon:ft.geometry.coordinates[0], lat:ft.geometry.coordinates[1], source:ft.properties?.source||'' })); }
-function exportXLSX(){ const list=getVisiblePoiList(); const ws=XLSX.utils.json_to_sheet(rowsFrom(list)); const wb=XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb,ws,'POI'); XLSX.writeFile(wb,'poi_visible.xlsx'); }
-function exportCSV(){  const list=getVisiblePoiList(); const ws=XLSX.utils.json_to_sheet(rowsFrom(list)); const csv=XLSX.utils.sheet_to_csv(ws); downloadBlob(csv,'poi_visible.csv','text/csv;charset=utf-8;'); }
-function exportGeoJSON(){ const list=getVisiblePoiList(); downloadBlob(JSON.stringify(fc(list)),'poi_visible.geojson','application/geo+json'); }
+/* ========================= DATA MODEL ========================= */
+const COLS = [
+  {k:'name', label:'Name'},
+  {k:'no_house', label:'No House'},
+  {k:'alternate', label:'Alternate'},
+  {k:'street', label:'Street'},
+  {k:'l5', label:'L5'},
+  {k:'l4', label:'L4'},
+  {k:'l3', label:'L3'},
+  {k:'l2', label:'L2'},
+  {k:'l1', label:'L1'},
+  {k:'business_type', label:'Business Type'},
+  {k:'lat', label:'Lat'},
+  {k:'lon', label:'Long'},
+  {k:'picture', label:'Picture'}
+];
+function makeFeatureFromAttrs(attrs){
+  const lon=Number(attrs.lon), lat=Number(attrs.lat);
+  return {
+    type:'Feature',
+    geometry:{ type:'Point', coordinates:[lon,lat] },
+    properties:{
+      id: attrs.id || makeId(),
+      name: attrs.name||'',
+      no_house: attrs.no_house||'',
+      alternate: attrs.alternate||'',
+      street: attrs.street||'',
+      l5: attrs.l5||'', l4: attrs.l4||'', l3: attrs.l3||'', l2: attrs.l2||'', l1: attrs.l1||'',
+      business_type: attrs.business_type||'',
+      picture: attrs.picture||'',
+      source: attrs.source||'manual'
+    }
+  };
+}
+function addPoi(attrs, refresh=true){
+  const lon = clamp(Number(attrs.lon), -180, 180);
+  const lat = clamp(Number(attrs.lat), -90, 90);
+  const key = keyLonLat(lon, lat);
+  if (poiIndex.has(key)) return false;
+  poiIndex.add(key);
+  const ft = makeFeatureFromAttrs({...attrs, lon, lat});
+  poiAll.push(ft);
+  if (refresh){
+    setSourceData(SRC_POI_ALL, poiAll);
+    applyAoiFilter(false);
+  }
+  return true;
+}
+
+/* ========================= TABLE (SCROLL + EDIT) ========================= */
+const tbody = document.querySelector('#poiTable tbody');
+
+function renderTable(list){
+  tbody.innerHTML='';
+  list.forEach((ft,i)=>{
+    const p = ft.properties||{};
+    const [lon,lat]=ft.geometry.coordinates;
+    const tr = document.createElement('tr');
+    tr.dataset.id = p.id;
+    tr.innerHTML = `
+      <td style="width:38px">${i+1}</td>
+      <td style="width:140px" data-k="name" contenteditable="true">${escapeHtml(p.name||'')}</td>
+      <td style="width:90px" data-k="no_house" contenteditable="true">${escapeHtml(p.no_house||'')}</td>
+      <td style="width:120px" data-k="alternate" contenteditable="true">${escapeHtml(p.alternate||'')}</td>
+      <td style="width:140px" data-k="street" contenteditable="true">${escapeHtml(p.street||'')}</td>
+      <td style="width:70px" data-k="l5" contenteditable="true">${escapeHtml(p.l5||'')}</td>
+      <td style="width:70px" data-k="l4" contenteditable="true">${escapeHtml(p.l4||'')}</td>
+      <td style="width:70px" data-k="l3" contenteditable="true">${escapeHtml(p.l3||'')}</td>
+      <td style="width:70px" data-k="l2" contenteditable="true">${escapeHtml(p.l2||'')}</td>
+      <td style="width:70px" data-k="l1" contenteditable="true">${escapeHtml(p.l1||'')}</td>
+      <td style="width:100px" data-k="business_type" contenteditable="true">${escapeHtml(p.business_type||'')}</td>
+      <td style="width:90px" data-k="lat" contenteditable="true">${lat.toFixed(6)}</td>
+      <td style="width:90px" data-k="lon" contenteditable="true">${lon.toFixed(6)}</td>
+      <td style="width:140px" data-k="picture" contenteditable="true" title="Paste URL gambar">${escapeHtml(p.picture||'')}</td>
+    `;
+    tr.style.cursor='pointer';
+    tr.addEventListener('dblclick', ()=> map.easeTo({center:[lon,lat],zoom:18,pitch:60}));
+    tbody.appendChild(tr);
+  });
+}
+
+function escapeHtml(s){ return String(s).replace(/[&<>"']/g, m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[m])); }
+
+function findFeatureById(id){ return poiAll.find(ft=>ft.properties?.id===id); }
+function updateFeatureFromCell(id, key, value){
+  const ft = findFeatureById(id); if (!ft) return;
+  if (key==='lat' || key==='lon'){
+    const v = Number(value);
+    if (!isFinite(v)) return; // ignore invalid
+    if (key==='lat') ft.geometry.coordinates[1] = clamp(v,-90,90);
+    else ft.geometry.coordinates[0] = clamp(v,-180,180);
+  } else {
+    ft.properties[key] = value;
+  }
+  // reflect to layers and counter/table (only partial update)
+  setSourceData(SRC_POI_ALL, poiAll);
+  applyAoiFilter(false);
+}
+
+// save on Enter or blur
+tbody.addEventListener('keydown', e=>{
+  if (e.key==='Enter'){ e.preventDefault(); e.target.blur(); }
+});
+tbody.addEventListener('blur', e=>{
+  const cell = e.target.closest('td[contenteditable="true"]'); if (!cell) return;
+  const tr = e.target.closest('tr'); const id = tr?.dataset?.id; const key = cell.dataset.k; const val = cell.textContent.trim();
+  updateFeatureFromCell(id, key, val);
+}, true);
+
+/* ========================= ADD MODE (CLICK MAP = ADD POI) ========================= */
+document.getElementById('addMode').addEventListener('change', (e)=>{ addMode = e.target.checked; });
+map.on('click', (e)=>{
+  if (!addMode) return;
+  const lon = e.lngLat.lng, lat = e.lngLat.lat;
+  const ok = addPoi({ lon, lat, name:'', no_house:'', alternate:'', street:'', l5:'',l4:'',l3:'',l2:'',l1:'', business_type:'', picture:'', source:'click' });
+  if (!ok) return;
+  setSourceData(SRC_POI_ALL, poiAll);
+  applyAoiFilter(false);
+});
+
+/* ========================= EXPORT / IMPORT ========================= */
+function rowsFrom(list){
+  return list.map(ft=>{
+    const p=ft.properties||{}, [lon,lat]=ft.geometry.coordinates;
+    return {
+      id:p.id||'',
+      Name:p.name||'',
+      'No House':p.no_house||'',
+      Alternate:p.alternate||'',
+      Street:p.street||'',
+      L5:p.l5||'', L4:p.l4||'', L3:p.l3||'', L2:p.l2||'', L1:p.l1||'',
+      'Bussines Type':p.business_type||'',
+      Lat:lat, Long:lon,
+      Picture:p.picture||'',
+      source:p.source||''
+    };
+  });
+}
+function exportXLSX(){
+  const list=getVisiblePoiList();
+  const ws = XLSX.utils.json_to_sheet(rowsFrom(list));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'POI');
+  XLSX.writeFile(wb, 'poi_visible.xlsx');
+}
+function exportGeoJSON(){
+  const list=getVisiblePoiList();
+  downloadBlob(JSON.stringify(fc(list)), 'poi_visible.geojson', 'application/geo+json');
+}
 function downloadBlob(content, filename, type){ const blob=new Blob([content],{type}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url); }
+
 async function importXLSX(file){
-  const data=await file.arrayBuffer(); const wb=XLSX.read(data); const ws=wb.Sheets[wb.SheetNames[0]]; const json=XLSX.utils.sheet_to_json(ws,{defval:''});
+  const data=await file.arrayBuffer(); const wb=XLSX.read(data); const ws=wb.Sheets[wb.SheetNames[0]];
+  const json=XLSX.utils.sheet_to_json(ws,{defval:''}); // tolerate missing columns
   let added=0;
   for (const r of json){
-    const lon=Number(r.lon??r.longitude??r.x??r.lng), lat=Number(r.lat??r.latitude??r.y);
-    if (!isFinite(lon)||!isFinite(lat)) continue;
-    const key=keyLonLat(lon,lat); if (poiIndex.has(key)) continue;
-    poiIndex.add(key);
-    poiAll.push({type:'Feature',geometry:{type:'Point',coordinates:[lon,lat]},properties:{ id:String(r.id||makeId()), name:String(r.name||''), type:String(r.type||''), height:r.height!==''?Number(r.height):null, source:String(r.source||'import(xlsx)') }});
-    added++;
+    // accept both our labels and plain keys
+    const name = r.Name ?? r.name ?? '';
+    const no_house = r['No House'] ?? r.no_house ?? r.housenumber ?? '';
+    const alternate = r.Alternate ?? r.alternate ?? '';
+    const street = r.Street ?? r.street ?? r['addr:street'] ?? '';
+    const l5 = r.L5 ?? '', l4=r.L4 ?? '', l3=r.L3 ?? '', l2=r.L2 ?? '', l1=r.L1 ?? '';
+    const business_type = r['Bussines Type'] ?? r.business_type ?? r.amenity ?? r.shop ?? '';
+    const lat = Number(r.Lat ?? r.lat ?? r.latitude ?? r.y);
+    const lon = Number(r.Long ?? r.lon ?? r.longitude ?? r.x ?? r.lng);
+    const picture = r.Picture ?? r.picture ?? '';
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const ok = addPoi({ lon, lat, name, no_house, alternate, street, l5,l4,l3,l2,l1, business_type, picture, source: r.source||'import(xlsx)' }, false);
+    if (ok) added++;
   }
-  setSourceData(SRC_POI_ALL, poiAll); applyAoiFilter(false); alert(`Import selesai. Ditambahkan: ${added} POI.`);
-}
-function renderPreviewTable(list){
-  const tbody=document.querySelector('#poiTable tbody'); tbody.innerHTML='';
-  list.forEach((ft,i)=>{ const p=ft.properties||{},[lon,lat]=ft.geometry.coordinates; const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${i+1}</td><td title="${p.name||''}">${p.name||''}</td><td>${p.type||''}</td><td>${p.height??''}</td><td>${lon.toFixed(6)}</td><td>${lat.toFixed(6)}</td>`;
-    tr.style.cursor='pointer'; tr.onclick=()=>map.easeTo({center:[lon,lat],zoom:18,pitch:60}); tbody.appendChild(tr);
-  });
+  setSourceData(SRC_POI_ALL, poiAll);
+  applyAoiFilter(false);
+  alert(`Import selesai. Ditambahkan: ${added} POI.`);
 }
 
 /* ========================= UI HOOKS ========================= */
 document.getElementById('genPoiBtn').addEventListener('click', generateInView);
 document.getElementById('genAoiBtn').addEventListener('click', generateInAOI);
 document.getElementById('expXlsxBtn').addEventListener('click', exportXLSX);
-document.getElementById('expCsvBtn').addEventListener('click', exportCSV);
 document.getElementById('expGeoJsonBtn').addEventListener('click', exportGeoJSON);
 document.getElementById('clearBtn').addEventListener('click', ()=>{
   if (!confirm('Hapus semua POI?')) return;
@@ -386,63 +529,37 @@ document.getElementById('impXlsxInput').addEventListener('change', e=>{ const f=
 document.getElementById('drawAoiBtn').addEventListener('click', ()=>{ const mode=Draw.getMode(); Draw.changeMode(mode==='draw_polygon'?'simple_select':'draw_polygon'); });
 document.getElementById('applyAoiBtn').addEventListener('click', ()=>{ aoiGeom=getAoiFeature()?.geometry||null; applyAoiFilter(true); });
 document.getElementById('clearAoiBtn').addEventListener('click', ()=>{ Draw.deleteAll(); aoiGeom=null; if (aoiFilterOn) applyAoiFilter(true); });
-document.getElementById('toggleBldBtn').addEventListener('click', ()=>{
-  const now = buildingsVisible; setBuildingsVisibility(now?'none':'visible');
-  document.getElementById('toggleBldBtn').textContent = 'Buildings: ' + (now ? 'Show' : 'Hide');
-});
 
 map.on('draw.create', ()=>{ aoiGeom=getAoiFeature()?.geometry||null; });
 map.on('draw.update', ()=>{ aoiGeom=getAoiFeature()?.geometry||null; });
 
 map.on('moveend', updateViewInfo);
-function updateViewInfo(){ const b=map.getBounds(); const dx=(b.getEast()-b.getWest()).toFixed(4); const dy=(b.getNorth()-b.getSouth()).toFixed(4); document.getElementById('viewInfo').textContent=`Δlon ${dx} • Δlat ${dy}`; }
+function updateViewInfo(){
+  const b=map.getBounds(); const dx=(b.getEast()-b.getWest()).toFixed(4); const dy=(b.getNorth()-b.getSouth()).toFixed(4);
+  document.getElementById('viewInfo').textContent=`Δlon ${dx} • Δlat ${dy}`;
+}
 
-/* ========================= CHAT RULE-BASED ========================= */
-const chatBody=document.getElementById('chatBody'); const chatInput=document.getElementById('chatInput'); const sendBtn=document.getElementById('send');
-function addMsg(t,who='bot'){ const d=document.createElement('div'); d.className=`msg ${who}`; d.innerHTML=`<div class="bub">${t}</div>`; chatBody.appendChild(d); chatBody.scrollTop=chatBody.scrollHeight; }
-function parseCommand(s){
-  const tl=s.trim().toLowerCase();
-  if (tl==='help'||tl==='/help') return {a:'help'};
-  if (tl==='generate') return {a:'gen'};
-  if (tl==='aoi generate') return {a:'gen_aoi'};
-  if (tl==='aoi apply') return {a:'aoi_apply'};
-  if (tl==='aoi clear') return {a:'aoi_clear'};
-  if (tl==='buildings hide') return {a:'bld',v:'hide'};
-  if (tl==='buildings show') return {a:'bld',v:'show'};
-  const mSnap=tl.match(/^snap\s+(polylabel|centroid|pointon)$/); if (mSnap) return {a:'snap',v:mSnap[1]};
-  if (tl==='clear') return {a:'clear'};
-  if (/^export\s+(csv|xlsx|geojson)$/.test(tl)) return {a:'export',fmt:tl.split(/\s+/)[1]};
-  if (/^fly\s+petronas$/.test(tl)) return {a:'fly'};
-  const m = tl.match(/^style\s+(satellite|dark|light|standard)$/); if (m) return {a:'style',v:m[1]};
-  return {a:'unknown'};
-}
-function handleCommand(cmd){
-  switch(cmd.a){
-    case 'help': addMsg('generate | aoi generate | aoi apply | aoi clear | buildings hide/show | snap polylabel|centroid|pointon | export csv|xlsx|geojson | clear | fly petronas | style satellite|dark|light|standard'); break;
-    case 'gen': generateInView(); addMsg('Generate dari view…'); break;
-    case 'gen_aoi': generateInAOI(); addMsg('Generate khusus AOI…'); break;
-    case 'aoi_apply': aoiGeom=getAoiFeature()?.geometry||null; applyAoiFilter(true); addMsg('AOI filter toggled.'); break;
-    case 'aoi_clear': Draw.deleteAll(); aoiGeom=null; if (aoiFilterOn) applyAoiFilter(true); addMsg('AOI cleared.'); break;
-    case 'bld': setBuildingsVisibility(cmd.v==='hide'?'none':'visible'); addMsg('Buildings: '+cmd.v); break;
-    case 'snap': SNAP_MODE=cmd.v; (document.getElementById('snapMode').value=cmd.v); addMsg('Snap mode: '+cmd.v); break;
-    case 'clear':
-      poiAll=[]; poiIndex.clear(); setSourceData(SRC_POI_ALL, poiAll); setSourceData(SRC_POI_AOI, []); aoiGeom=null; aoiFilterOn=false; refreshCounters(getVisiblePoiList()); addMsg('Semua POI dihapus.');
-      break;
-    case 'export':
-      if (cmd.fmt==='csv') exportCSV(); else if (cmd.fmt==='xlsx') exportXLSX(); else exportGeoJSON();
-      addMsg(`Export ${cmd.fmt} (berdasarkan tampilan saat ini).`); break;
-    case 'fly': map.flyTo({ center: PETRONAS, zoom: 17.2, pitch: 72, bearing: 20, speed:0.6, curve:1.2 }); addMsg('Kamera ke Petronas.'); break;
-    case 'style':
-      const mapStyle={ satellite:'mapbox://styles/mapbox/satellite-streets-v12', dark:'mapbox://styles/mapbox/dark-v11', light:'mapbox://styles/mapbox/light-v11', standard:'mapbox://styles/mapbox/standard' }[cmd.v];
-      map.setStyle(mapStyle);
-      map.once('style.load', ()=>{ ensure3DBuildingsLayer(); ensurePoiSourcesAndLayers(); setSourceData(SRC_POI_ALL, poiAll); applyAoiFilter(false); setBuildingsVisibility(buildingsVisible?'visible':'none'); });
-      addMsg(`Style: ${cmd.v}.`); break;
-    default: addMsg('Tidak paham. Ketik: help');
-  }
-}
-function onSend(){ const t=chatInput.value.trim(); if(!t) return; addMsg(t,'me'); chatInput.value=''; handleCommand(parseCommand(t)); }
-sendBtn.addEventListener('click', onSend);
-chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSend(); });
+/* ========================= EXTRA: klik marker info gambar ========================= */
+map.on('mousemove', LYR_POI_DOTS_ALL, (e)=> map.getCanvas().style.cursor='pointer');
+map.on('mouseleave', LYR_POI_DOTS_ALL, ()=> map.getCanvas().style.cursor='');
+map.on('click', LYR_POI_DOTS_ALL, (e)=>{
+  const f = e.features?.[0]; if (!f) return;
+  const p = f.properties || {};
+  const pic = p.picture || '';
+  const html = `
+    <div style="font:13px system-ui">
+      <b>${p.name||'POI'}</b><br/>
+      ${p.street||''} ${p.no_house||''}<br/>
+      ${p.business_type||''}<br/><br/>
+      ${pic ? `<img src="${pic}" style="max-width:220px;max-height:150px;border-radius:6px;display:block">` : 'No picture'}
+    </div>`;
+  new mapboxgl.Popup({offset:12}).setLngLat(e.lngLat).setHTML(html).addTo(map);
+});
+
+/* ========================= GENERATE BUTTONS ========================= */
+function escapeKeyCloseEdit(){/* inline, handled by blur/enter */}
+
+/* ========================= FIN ========================= */
 </script>
 </body>
 </html>
