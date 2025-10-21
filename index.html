@@ -1,423 +1,385 @@
 <!DOCTYPE html>
 <html lang="id">
 <head>
-  <meta charset="utf-8" />
-  <title>MyMap POI • Excel Import/Export + AOI Manual + OSM + Geo-AI Rumah</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta charset="utf-8" />
+<title>MyMap • POI + Cluster + Table + AI Chat + OSM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <!-- Leaflet & Leaflet.Draw -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
+<!-- Leaflet & Draw -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-draw@1.0.4/dist/leaflet.draw.js"></script>
 
-  <!-- SheetJS (Excel) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<!-- MarkerCluster -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- Turf.js (geoprocessing) -->
-  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<!-- Turf + SheetJS + FileSaver -->
+<script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
 
-  <!-- FileSaver (untuk ekspor file di browser) -->
-  <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<!-- jQuery + DataTables -->
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.dataTables.min.css">
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
 
-  <style>
-    html, body, #map { height:100%; margin:0; }
-    .panel {
-      position:absolute; z-index:1000; top:10px; left:10px;
-      background:rgba(20,20,24,.92); color:#fff; padding:12px 14px;
-      border-radius:12px; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      box-shadow:0 8px 24px rgba(0,0,0,.25); max-width: 460px;
-    }
-    .panel h3 { margin:0 0 8px; font-size:16px; }
-    .panel .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
-    .panel input[type="file"], .panel input[type="text"], .panel textarea { width:100%; }
-    .panel input[type="text"], .panel textarea {
-      background:#121317; border:1px solid #2a2d36; color:#fff; border-radius:10px;
-      padding:8px 10px; outline:none;
-    }
-    .panel textarea { min-height:60px; resize:vertical }
-    .panel label { font-weight:600; display:block }
-    .panel small { opacity:.8 }
-    .panel button {
-      border:0; padding:8px 10px; border-radius:10px; cursor:pointer;
-      background:#2d6cdf; color:#fff; font-weight:600;
-    }
-    .panel button.secondary{ background:#444; }
-    .panel button.warn{ background:#d94848; }
-    .panel button:disabled{ opacity:.6; cursor:not-allowed }
-    .legend {
-      position:absolute; right:10px; bottom:10px; z-index:1000;
-      background:rgba(255,255,255,.95); color:#111; padding:10px 12px; border-radius:10px;
-      box-shadow:0 8px 24px rgba(0,0,0,.15); font: 13px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-    }
-    .legend .k { display:flex; gap:8px; align-items:center; margin:6px 0; }
-    .legend .dot { width:12px; height:12px; border-radius:50% }
-    .dot.poi { background:#2d6cdf }
-    .dot.ai  { background:#22a06b }
-    .dot.bld { background:#a278ff }
-    .dot.aoi { background:#ffa600 }
-    .toast {
-      position:absolute; top:10px; right:10px; z-index:1100;
-      background:rgba(17,17,20,.95); color:#fff; padding:8px 12px; border-radius:10px;
-      box-shadow:0 8px 24px rgba(0,0,0,.25); font-size:13px; display:none;
-    }
-  </style>
+<style>
+  html,body,#map{height:100%;margin:0}
+  /* Panels */
+  .panel{position:absolute;z-index:1000;top:10px;left:10px;background:rgba(20,20,24,.92);color:#fff;padding:12px 14px;border-radius:12px;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:520px}
+  .panel h3{margin:0 0 8px;font-size:16px}
+  .panel .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
+  .panel input,.panel textarea,.panel select{background:#121317;border:1px solid #2a2d36;color:#fff;border-radius:10px;padding:8px 10px;outline:none}
+  .panel input[type=file]{padding:4px 8px}
+  .panel button{border:0;padding:8px 10px;border-radius:10px;cursor:pointer;background:#2d6cdf;color:#fff;font-weight:600}
+  .panel button.secondary{background:#444}
+  .panel button.warn{background:#d94848}
+  .panel small{opacity:.8}
+  .legend{position:absolute;right:10px;bottom:10px;z-index:1000;background:rgba(255,255,255,.95);color:#111;padding:10px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);font:13px/1.4 system-ui}
+  .legend .k{display:flex;gap:8px;align-items:center;margin:6px 0}
+  .legend .dot{width:12px;height:12px;border-radius:50%}
+  .dot.poi{background:#2d6cdf}.dot.ai{background:#22a06b}.dot.bld{background:#a278ff}.dot.aoi{background:#ffa600}
+  .toast{position:absolute;top:10px;right:10px;z-index:1100;background:rgba(17,17,20,.95);color:#fff;padding:8px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.25);font-size:13px;display:none}
+  /* Bottom drawer for table + chat */
+  .drawer{position:absolute;left:0;right:0;bottom:0;height:40%;background:rgba(255,255,255,.98);box-shadow:0 -8px 24px rgba(0,0,0,.25);border-top-left-radius:14px;border-top-right-radius:14px;display:grid;grid-template-columns:1.3fr .7fr;gap:12px;padding:10px;z-index:999}
+  .drawer h4{margin:0 0 6px;font:600 14px/1.2 system-ui}
+  #poiTable{width:100%}
+  /* Modal form */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;z-index:1200}
+  .modal .box{background:#0f1116;color:#fff;width:420px;border-radius:12px;padding:14px 14px 10px;box-shadow:0 30px 60px rgba(0,0,0,.45)}
+  .modal .box h3{margin:0 0 8px;font:600 16px/1 system-ui}
+  .modal .box .row{display:flex;gap:8px;margin:6px 0}
+  .modal .box label{width:110px;font:600 13px/30px system-ui}
+  .modal .box input,.modal .box textarea{flex:1;background:#10131a;border:1px solid #293042;color:#fff;border-radius:10px;padding:8px 10px}
+  .modal .box .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+  .badge{display:inline-block;background:#eee;border-radius:999px;padding:2px 8px;font-size:11px;margin-left:6px}
+  .chat{display:flex;flex-direction:column;height:100%}
+  .chatlog{flex:1;overflow:auto;border:1px solid #eee;border-radius:8px;padding:8px;background:#fafafa}
+  .chatlog .ai{background:#eef4ff}.chatlog .me{background:#f6f7f8}
+  .chatlog .msg{padding:6px 8px;border-radius:8px;margin:4px 0;font:13px/1.35 system-ui}
+  .chatbar{display:flex;gap:8px;margin-top:8px}
+  .chatbar input{flex:1;padding:8px 10px;border-radius:10px;border:1px solid #ddd}
+</style>
 </head>
 <body>
-  <div id="map"></div>
+<div id="map"></div>
 
-  <div class="panel">
-    <h3>MyMap – POI, AOI, OSM & Geo-AI</h3>
+<!-- Left control panel -->
+<div class="panel">
+  <h3>MyMap — POI, Cluster, Table & AI</h3>
 
-    <!-- AOI cepat: KL Sentral -->
-    <div class="row" style="width:100%">
-      <button id="klBtn" class="secondary" title="Tambah AOI default KL Sentral (±500m)">KL Sentral AOI</button>
-      <small>Otomasis: BBOX <code>101.6820,3.1300,101.6908,3.1385</code></small>
-    </div>
-
-    <!-- AOI dari koordinat manual -->
-    <div class="row" style="width:100%">
-      <label>Buat AOI dari Koordinat (lat,lon; lat,lon; ...)</label>
-      <textarea id="coordsInput" placeholder="Contoh:
-3.1569,101.7098;3.1578,101.7170;3.1612,101.7160;3.1602,101.7092"></textarea>
-      <div style="display:flex; gap:8px; width:100%">
-        <button id="addAoiBtn" class="secondary" title="Tambah polygon AOI dari daftar koordinat">Tambah AOI</button>
-        <input id="bboxInput" type="text" placeholder="atau BBOX: minLon,minLat,maxLon,maxLat (opsional)" value="101.6820,3.1300,101.6908,3.1385">
-        <button id="addBboxBtn" class="secondary" title="Tambah rectangle dari BBOX">Tambah AOI dari BBOX</button>
-      </div>
-      <small>Tips: minimal 3 titik untuk polygon. Format decimal degrees. BBOX contoh: <i>101.71,3.155,101.72,3.165</i> (ingat urutannya: <b>lon,lat</b>).</small>
-    </div>
-
-    <!-- Impor/ekspor -->
-    <div class="row">
-      <label><b>Impor Excel (.xlsx)</b></label>
-      <input id="xlsxInput" type="file" accept=".xlsx,.xls" />
-    </div>
-    <div class="row">
-      <button id="exportCsvBtn">Ekspor CSV</button>
-      <button id="exportGeoBtn" class="secondary">Ekspor GeoJSON</button>
-    </div>
-
-    <!-- OSM & Geo-AI -->
-    <div class="row">
-      <button id="fetchOSMBtn">Ambil Bangunan OSM (dalam AOI)</button>
-      <button id="genHouseBtn">Geo-AI: Titik Rumah</button>
-    </div>
-
-    <!-- Bersihkan -->
-    <div class="row">
-      <button id="clearAOIBtn" class="secondary">Bersihkan AOI</button>
-      <button id="clearPOIBtn" class="secondary">Bersihkan POI Excel</button>
-      <button id="clearBldBtn" class="secondary">Bersihkan Bangunan</button>
-      <button id="clearAIBtn" class="secondary">Bersihkan Titik Rumah</button>
-      <button id="clearDrawBtn" class="warn">Bersihkan Gambar</button>
-    </div>
-
-    <div class="row" style="margin-top:-2px">
-      <small>
-        1) Gambar / input AOI → 2) “Ambil Bangunan OSM” → 3) “Geo-AI: Titik Rumah” →
-        4) Impor Excel POI → 5) Ekspor CSV/GeoJSON
-      </small>
-    </div>
+  <div class="row" style="width:100%">
+    <button id="klBtn" class="secondary">KL Sentral AOI</button>
+    <small>BBOX default: <code>101.6820,3.1300,101.6908,3.1385</code></small>
   </div>
 
-  <div class="legend">
-    <div class="k"><span class="dot aoi"></span> AOI (gambar / input koordinat)</div>
-    <div class="k"><span class="dot bld"></span> Footprint Bangunan OSM</div>
-    <div class="k"><span class="dot ai"></span> Titik Rumah (Geo-AI)</div>
-    <div class="k"><span class="dot poi"></span> POI dari Excel / Manual</div>
+  <div class="row" style="width:100%">
+    <label>Buat AOI dari Koordinat (lat,lon; lat,lon; ...)</label>
+    <textarea id="coordsInput" placeholder="3.1569,101.7098;3.1578,101.7170;3.1612,101.7160;3.1602,101.7092"></textarea>
+    <div style="display:flex;gap:8px;width:100%">
+      <button id="addAoiBtn" class="secondary">Tambah AOI</button>
+      <input id="bboxInput" type="text" placeholder="BBOX: minLon,minLat,maxLon,maxLat" value="101.6820,3.1300,101.6908,3.1385">
+      <button id="addBboxBtn" class="secondary">Tambah AOI dari BBOX</button>
+    </div>
+    <small>Urutan BBOX: <b>lon,lat</b>. Minimal 3 titik untuk polygon.</small>
   </div>
 
-  <div id="toast" class="toast"></div>
+  <div class="row">
+    <label><b>Impor Excel (.xlsx)</b></label>
+    <input id="xlsxInput" type="file" accept=".xlsx,.xls" />
+  </div>
+  <div class="row">
+    <button id="exportCsvBtn">Ekspor CSV</button>
+    <button id="exportGeoBtn" class="secondary">Ekspor GeoJSON</button>
+  </div>
+
+  <div class="row">
+    <button id="fetchOSMBtn">Ambil Bangunan OSM (dalam AOI)</button>
+    <button id="genHouseBtn">Geo-AI: Titik Rumah</button>
+  </div>
+
+  <div class="row">
+    <button id="addPOIBtn" class="secondary">Tambah POI</button>
+    <button id="clearAOIBtn" class="secondary">Bersihkan AOI</button>
+    <button id="clearPOIBtn" class="secondary">Bersihkan POI</button>
+    <button id="clearBldBtn" class="secondary">Bersihkan Bangunan</button>
+    <button id="clearAIBtn" class="secondary">Bersihkan Titik Rumah</button>
+  </div>
+</div>
+
+<!-- Legend -->
+<div class="legend">
+  <div class="k"><span class="dot aoi"></span> AOI (gambar/input koordinat)</div>
+  <div class="k"><span class="dot bld"></span> Footprint Bangunan OSM</div>
+  <div class="k"><span class="dot ai"></span> Titik Rumah (Geo-AI)</div>
+  <div class="k"><span class="dot poi"></span> POI (Excel/Manual)</div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<!-- Bottom drawer: Table + AI Chat -->
+<div class="drawer">
+  <div>
+    <h4>Daftar POI <span class="badge" id="poiCount">0</span></h4>
+    <table id="poiTable" class="display"></table>
+  </div>
+  <div class="chat">
+    <h4>AI Chat (perintah cepat)</h4>
+    <div class="chatlog" id="chatlog"></div>
+    <div class="chatbar">
+      <input id="chatInput" placeholder='contoh: ambil osm; tambah poi name="Titik A" lat=3.134 lon=101.686; buat aoi bbox=101.682,3.130,101.691,3.139'>
+      <button id="chatSend">Kirim</button>
+    </div>
+    <small>Perintah: <code>buat aoi bbox=...</code> • <code>buat aoi poly=lat,lon;...</code> • <code>ambil osm</code> • <code>ai rumah</code> • <code>tambah poi name=.. lat=.. lon=..</code> • <code>edit poi id=.. name=..</code> • <code>hapus poi id=..</code> • <code>ekspor csv|geojson</code></small>
+  </div>
+</div>
+
+<!-- Modal Form Add/Edit POI -->
+<div id="poiModal" class="modal">
+  <div class="box">
+    <h3 id="poiModalTitle">Tambah POI</h3>
+    <div class="row"><label>Nama</label><input id="f_name"></div>
+    <div class="row"><label>Alamat</label><input id="f_addr"></div>
+    <div class="row"><label>Kota</label><input id="f_city"></div>
+    <div class="row"><label>Status</label><input id="f_status"></div>
+    <div class="row"><label>Latitude</label><input id="f_lat" type="number" step="0.0000001"></div>
+    <div class="row"><label>Longitude</label><input id="f_lon" type="number" step="0.0000001"></div>
+    <div class="row"><label>Foto URL</label><input id="f_photo"></div>
+    <div class="actions">
+      <button id="poiSave">Simpan</button>
+      <button id="poiCancel" class="secondary">Batal</button>
+      <button id="poiDelete" class="warn" style="display:none">Hapus</button>
+    </div>
+  </div>
+</div>
 
 <script>
-  // ====== UTIL UI ======
-  const toastEl = document.getElementById('toast');
-  function toast(msg, ms=2500){ toastEl.textContent = msg; toastEl.style.display='block'; setTimeout(()=> toastEl.style.display='none', ms); }
-  function disable(el, v=true){ el.disabled = v; }
+/* ===== UI helpers ===== */
+const toastEl = document.getElementById('toast');
+function toast(msg,ms=2200){ toastEl.textContent=msg; toastEl.style.display='block'; setTimeout(()=>toastEl.style.display='none',ms); }
+function markerDot(color){return L.divIcon({className:'',html:`<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${color};border:2px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.25)"></span>`,iconSize:[12,12],iconAnchor:[6,6]});}
+const iconPOI=markerDot('#2d6cdf'), iconAI=markerDot('#22a06b');
 
-  // ====== PETA & LAYER DASAR ======
-  const map = L.map('map', { center:[3.1343, 101.6864], zoom: 16 }); // KL Sentral default view
+/* ===== Map & layers ===== */
+const map=L.map('map',{center:[3.1343,101.6864],zoom:16});
+const esri=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'&copy; Esri'}).addTo(map);
+const osm=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'&copy; OpenStreetMap'});
+const drawnItems=new L.FeatureGroup().addTo(map);
+const aoiLayer=L.layerGroup().addTo(map);
+const buildingLayer=L.geoJSON(null,{style:{color:'#7a5cff',weight:1,fillOpacity:0.25}}).addTo(map);
+const poiCluster=L.markerClusterGroup({ disableClusteringAtZoom: 19 }).addTo(map);
+const aiCluster=L.markerClusterGroup({ disableClusteringAtZoom: 19 }).addTo(map);
 
-  const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: '&copy; Esri'
-  }).addTo(map);
+L.control.layers({'ESRI World Imagery':esri,'OSM Streets':osm},{
+  'AOI (Manual)':aoiLayer,'Drawn (Gambar)':drawnItems,'Bangunan OSM':buildingLayer,
+  'POI (cluster)':poiCluster,'Titik Rumah (AI)':aiCluster
+},{collapsed:true}).addTo(map);
 
-  const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution:'&copy; OpenStreetMap' });
+const drawControl=new L.Control.Draw({
+  draw:{ polygon:{allowIntersection:false,showArea:true,shapeOptions:{color:'#ffa600'}},
+         rectangle:{shapeOptions:{color:'#ffa600'}}, polyline:true, circle:false, marker:true, circlemarker:false },
+  edit:{ featureGroup:drawnItems }
+}); map.addControl(drawControl);
+map.on(L.Draw.Event.CREATED,e=>{ if((e.layer instanceof L.Polygon)&&!(e.layer instanceof L.Polyline)) e.layer.setStyle?.({color:'#ffa600'}); drawnItems.addLayer(e.layer); });
 
-  const drawnItems = new L.FeatureGroup();
-  map.addLayer(drawnItems);
+/* ===== AOI helpers ===== */
+function getRing(layer){ if(!layer||!layer.getLatLngs) return null; let ll=layer.getLatLngs(); while(Array.isArray(ll)&&Array.isArray(ll[0])) ll=ll[0]; return ll; }
+function addBboxToAOI(minLon,minLat,maxLon,maxLat){
+  const rect=L.polygon([[minLat,minLon],[minLat,maxLon],[maxLat,maxLon],[maxLat,minLon]],{color:'#ffa600',weight:2,fillOpacity:.15});
+  aoiLayer.addLayer(rect); map.fitBounds(rect.getBounds(),{padding:[30,30]}); return rect;
+}
+const KL_BBOX=[101.6820,3.1300,101.6908,3.1385];
+document.getElementById('klBtn').onclick=()=>{ aoiLayer.clearLayers(); addBboxToAOI(...KL_BBOX); toast('AOI KL Sentral ditambahkan.'); };
+document.getElementById('addBboxBtn').onclick=()=>{ const v=document.getElementById('bboxInput').value.trim(); if(!v) return alert('Masukkan BBOX'); const p=v.split(',').map(x=>Number(x.trim())); if(p.length!==4||p.some(n=>!Number.isFinite(n))) return alert('Format BBOX salah'); addBboxToAOI(...p); };
+document.getElementById('addAoiBtn').onclick=()=>{ const val=document.getElementById('coordsInput').value.trim(); if(!val) return alert('Isi koordinat'); const coords=val.split(';').map(s=>s.split(',').map(n=>Number(n.trim()))).filter(a=>a.length===2); if(coords.length<3) return alert('Minimal 3 titik'); const poly=L.polygon(coords.map(([lat,lon])=>[lat,lon]),{color:'#ffa600',weight:2,fillOpacity:.15}); aoiLayer.addLayer(poly); map.fitBounds(poly.getBounds(),{padding:[30,30]}); };
 
-  const aoiLayer = L.layerGroup().addTo(map);           // AOI dari input manual
-  const poiExcelLayer = L.layerGroup().addTo(map);      // marker dari Excel
-  const buildingLayer = L.geoJSON(null, { style: { color:'#7a5cff', weight:1, fillOpacity:0.25 } }).addTo(map);
-  const housePointLayer = L.layerGroup().addTo(map);    // titik rumah hasil Geo-AI
+/* ===== POI store + table ===== */
+let seqId=1;
+const poiStore=new Map(); // id -> {id,props,marker}
+const poiTable=$('#poiTable').DataTable({
+  columns:[
+    {title:'ID',data:'id'},
+    {title:'Name',data:'props.Name'},
+    {title:'Lat',data:'props.Latitude'},
+    {title:'Lon',data:'props.Longitude'},
+    {title:'Status',data:'props.Status'},
+    {title:'City',data:'props.City'}
+  ],
+  data:[], paging:true, pageLength:8, searching:true, order:[[0,'asc']]
+});
+function refreshTable(){ const rows=[...poiStore.values()].map(x=>({id:x.id,props:x.props})); poiTable.clear().rows.add(rows).draw(); document.getElementById('poiCount').textContent=rows.length; }
+function addPOI(props){
+  const id=props.id ?? seqId++;
+  const lat=Number(props.Latitude), lon=Number(props.Longitude);
+  if(!Number.isFinite(lat)||!Number.isFinite(lon)) return alert('Lat/Lon tidak valid');
+  const mk=L.marker([lat,lon],{icon:iconPOI}).bindPopup(buildPopup(props));
+  mk.on('click',()=>openPOIModal('edit',{id,props}));
+  poiCluster.addLayer(mk);
+  poiStore.set(id,{id,props:{...props,id},marker:mk});
+  refreshTable();
+}
+function updatePOI(id,props){
+  const r=poiStore.get(id); if(!r) return;
+  r.props={...r.props,...props};
+  const lat=Number(r.props.Latitude), lon=Number(r.props.Longitude);
+  r.marker.setLatLng([lat,lon]).setPopupContent(buildPopup(r.props));
+  refreshTable();
+}
+function deletePOI(id){
+  const r=poiStore.get(id); if(!r) return;
+  poiCluster.removeLayer(r.marker);
+  poiStore.delete(id);
+  refreshTable();
+}
+/* table <-> map sync */
+$('#poiTable tbody').on('click','tr',function(){
+  const data=poiTable.row(this).data(); if(!data) return;
+  const rec=poiStore.get(Number(data.id)); if(rec){ map.flyTo(rec.marker.getLatLng(),19); rec.marker.openPopup(); }
+});
 
-  L.control.layers(
-    { 'ESRI World Imagery': esri, 'OSM Streets': osm },
-    { 'AOI (Manual)': aoiLayer, 'Drawn (Gambar)': drawnItems, 'Bangunan OSM': buildingLayer, 'Titik Rumah (AI)': housePointLayer, 'POI Excel': poiExcelLayer },
-    { collapsed: true }
-  ).addTo(map);
-
-  // ====== KONTROL DRAW ======
-  const drawControl = new L.Control.Draw({
-    draw: {
-      polygon:   { allowIntersection:false, showArea:true, shapeOptions:{ color:'#ffa600' } },
-      rectangle: { shapeOptions:{ color:'#ffa600' } },
-      polyline: true,
-      circle: false,
-      marker: true,
-      circlemarker: false
-    },
-    edit: { featureGroup: drawnItems }
-  });
-  map.addControl(drawControl);
-
-  map.on(L.Draw.Event.CREATED, e => {
-    if ((e.layer instanceof L.Polygon) && !(e.layer instanceof L.Polyline)) e.layer.setStyle?.({ color:'#ffa600' });
-    drawnItems.addLayer(e.layer);
-  });
-
-  // ====== IKON ======
-  function markerDot(colorHex) {
-    return L.divIcon({ className:'', html:`<span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:${colorHex};border:2px solid #fff;box-shadow:0 0 0 2px rgba(0,0,0,.25)"></span>`, iconSize:[12,12], iconAnchor:[6,6] });
-  }
-  const iconPOI = markerDot('#2d6cdf');
-  const iconAI  = markerDot('#22a06b');
-
-  // ====== HELPER ======
-  const toFixed6 = n => Number(n).toFixed(6);
-
-  function buildPopup(props) {
-    const { Name='', Address='', City='', Status='', Latitude='', Longitude='', Photo='' } = props || {};
-    const img = Photo ? `<div style="margin-top:6px"><img src="${Photo}" alt="" style="max-width:180px;border-radius:8px"/></div>` : '';
-    return `<div style="min-width:220px"><b>${Name || '(tanpa nama)'}</b><br/>${Address?Address+'<br/>':''}${City?City+'<br/>':''}${Status?'<i>Status: '+Status+'</i><br/>':''}${(Latitude!==''&&Longitude!=='')?`<small>Lat,Lon: ${toFixed6(Latitude)}, ${toFixed6(Longitude)}</small><br/>`:''}${img}</div>`;
-  }
-
-  // Ambil satu ring koordinat dari berbagai tipe polygon Leaflet
-  function getPolygonRing(layer){
-    if (!layer || !layer.getLatLngs) return null;
-    const ll = layer.getLatLngs();
-    // posibilitas: [LatLng[]] atau [[LatLng[]]] (multi) atau [[[LatLng[]]]] (very nested)
-    let ring = ll;
-    while (Array.isArray(ring) && Array.isArray(ring[0])) ring = ring[0];
-    return Array.isArray(ring) ? ring : null;
-  }
-
-  function firstPolygonOrRectangle(groupOrLayer) {
-    let found = null;
-    const scan = l => {
-      if (found) return;
-      if (l instanceof L.LayerGroup) l.eachLayer(scan);
-      else if ((l instanceof L.Polygon) && !(l instanceof L.Polyline)) found = l;
-    };
-    scan(groupOrLayer);
-    return found;
-  }
-
-  function addBboxToAOI(minLon,minLat,maxLon,maxLat){
-    const rect = L.polygon([
-      [minLat, minLon],
-      [minLat, maxLon],
-      [maxLat, maxLon],
-      [maxLat, minLon]
-    ], { color:'#ffa600', weight:2, fillOpacity:0.15 });
-    aoiLayer.addLayer(rect);
-    map.fitBounds(rect.getBounds(), { padding:[30,30] });
-    return rect;
-  }
-
-  // ====== AOI dari KOORDINAT MANUAL ======
-  const coordsInput = document.getElementById('coordsInput');
-  document.getElementById('addAoiBtn').onclick = () => {
-    const val = coordsInput.value.trim();
-    if (!val) return alert('Masukkan koordinat lat,lon; lat,lon; ...');
-    try {
-      const coords = val.split(';').map(c => c.split(',').map(s => Number(s.trim()))).filter(a => a.length===2 && Number.isFinite(a[0]) && Number.isFinite(a[1])).map(([lat, lon]) => [lat, lon]);
-      if (coords.length < 3) return alert('Minimal 3 titik untuk polygon AOI.');
-      const poly = L.polygon(coords, { color:'#ffa600', weight:2, fillOpacity:0.15 });
-      aoiLayer.addLayer(poly);
-      map.fitBounds(poly.getBounds(), { padding:[30,30] });
-    } catch(e) { console.error(e); alert('Format salah! Gunakan: lat,lon;lat,lon;lat,lon'); }
-  };
-
-  // ====== AOI dari BBOX ======
-  document.getElementById('addBboxBtn').onclick = () => {
-    const v = document.getElementById('bboxInput').value.trim();
-    if (!v) return alert('Masukkan BBOX: minLon,minLat,maxLon,maxLat');
-    const parts = v.split(',').map(s => Number(s.trim()));
-    if (parts.length !== 4 || parts.some(n => !Number.isFinite(n))) return alert('Format BBOX salah. Contoh: 101.71,3.155,101.72,3.165');
-    const [minLon, minLat, maxLon, maxLat] = parts;
-    if (minLon>=maxLon || minLat>=maxLat) return alert('Nilai BBOX tidak valid.');
-    addBboxToAOI(minLon,minLat,maxLon,maxLat);
-  };
-
-  // ====== KL Sentral AOI tombol cepat ======
-  const KL_BBOX = [101.6820,3.1300,101.6908,3.1385]; // minLon,minLat,maxLon,maxLat
-  document.getElementById('klBtn').onclick = () => {
-    aoiLayer.clearLayers();
-    addBboxToAOI(...KL_BBOX);
-    toast('AOI KL Sentral ditambahkan.');
-  };
-
-  // ====== IMPOR EXCEL ======
-  document.getElementById('xlsxInput').addEventListener('change', handleExcelImport);
-  async function handleExcelImport(ev) {
-    const file = ev.target.files[0];
-    if (!file) return;
-    const buf = await file.arrayBuffer();
-    const wb  = XLSX.read(buf, { type: 'array' });
-    const ws  = wb.Sheets[wb.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
-    poiExcelLayer.clearLayers();
-    rows.forEach((r, idx) => {
-      const lat = parseFloat(r.Latitude ?? r.lat ?? r.Lat ?? r.Y ?? r.y);
-      const lon = parseFloat(r.Longitude ?? r.lon ?? r.Lon ?? r.X ?? r.x);
-      if (Number.isFinite(lat) && Number.isFinite(lon)) {
-        const props = {
-          Name: r.Name ?? r.POI_Name ?? `POI ${idx+1}`,
-          Address: r.Address ?? r.Alamat ?? '',
-          City: r.City ?? r.Kota ?? '',
-          Status: r.Status ?? '',
-          Latitude: lat, Longitude: lon,
-          Photo: r.Photo ?? r['Link Picture'] ?? ''
-        };
-        const m = L.marker([lat, lon], { icon: iconPOI }).bindPopup(buildPopup(props));
-        m.feature = { type:'Feature', geometry:{ type:'Point', coordinates:[lon, lat] }, properties: props };
-        poiExcelLayer.addLayer(m);
-      }
-    });
-    if (poiExcelLayer.getLayers().length) map.fitBounds(poiExcelLayer.getBounds(), { padding:[30,30] });
-    else alert('Tidak ada baris valid (Latitude/Longitude) pada Excel.');
-  }
-
-  // ====== EKSPOR CSV & GEOJSON ======
-  document.getElementById('exportCsvBtn').onclick = () => {
-    const rows = [];
-    poiExcelLayer.eachLayer(m => {
-      const p = (m.feature && m.feature.properties) || {};
-      const ll = m.getLatLng();
-      rows.push({ Name:p.Name||'', Address:p.Address||'', City:p.City||'', Status:p.Status||'', Latitude:p.Latitude || (ll?.lat ?? ''), Longitude:p.Longitude || (ll?.lng ?? ''), Photo:p.Photo||'' });
-    });
-    if (!rows.length) { alert('Layer POI kosong.'); return; }
-    const headers = Object.keys(rows[0]);
-    const csv = [headers.join(',')].concat(rows.map(r => headers.map(h => `"${(r[h] ?? '').toString().replace(/"/g,'""')}"`).join(','))).join('\n');
-    saveAs(new Blob([csv], { type:'text/csv;charset=utf-8' }), 'poi_export.csv');
-  };
-
-  document.getElementById('exportGeoBtn').onclick = () => {
-    const feats = [];
-    poiExcelLayer.eachLayer(m => {
-      const ll = m.getLatLng();
-      const props = (m.feature && m.feature.properties) || {};
-      feats.push({ type:'Feature', geometry:{ type:'Point', coordinates:[ll.lng, ll.lat] }, properties: props });
-    });
-    const fc = { type:'FeatureCollection', features:feats };
-    saveAs(new Blob([JSON.stringify(fc,null,2)], { type:'application/geo+json' }), 'poi_export.geojson');
-  };
-
-  // ====== AMBIL BANGUNAN OSM via Overpass API (dalam AOI) ======
-  const overpassEndpoints = [
-    'https://overpass-api.de/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter',
-    'https://overpass.openstreetmap.ru/api/interpreter'
-  ];
-
-  document.getElementById('fetchOSMBtn').onclick = async (ev) => {
-    const btn = ev.currentTarget; disable(btn, true); toast('Mengambil bangunan OSM…');
-    let aoi = firstPolygonOrRectangle(drawnItems) || firstPolygonOrRectangle(aoiLayer);
-    if (!aoi) { disable(btn,false); return alert('Buat AOI dulu (gambar atau input koordinat/BBOX).'); }
-
-    try {
-      const ring = getPolygonRing(aoi);
-      if (!ring || ring.length < 3) throw new Error('AOI tidak valid.');
-
-      // Overpass poly format: "lat lon lat lon …"
-      const overpassPoly = ring.map(pt => `${pt.lat} ${pt.lng}`).join(' ');
-      const query = `[out:json][timeout:60];way(poly:"${overpassPoly}")["building"];(._;>;);out body;`;
-
-      let data = null, lastErr = null;
-      for (const url of overpassEndpoints) {
-        try {
-          const res = await fetch(url, { method:'POST', body: query, headers:{ 'Content-Type':'text/plain' } });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          data = await res.json();
-          if (data && data.elements && data.elements.length) break; // success with content
-        } catch (e){ lastErr = e; }
-      }
-      if (!data) throw lastErr || new Error('Gagal mengambil data dari semua endpoint Overpass.');
-
-      const gj = osmtogeojson(data);
-      buildingLayer.clearLayers();
-      buildingLayer.addData(gj);
-
-      if (buildingLayer.getLayers().length) {
-        map.fitBounds(buildingLayer.getBounds(), { padding:[30,30] });
-        toast(`OK: ${buildingLayer.getLayers().length} poligon bangunan.`);
-      } else {
-        toast('Tidak ada bangunan OSM di AOI ini.', 3000);
-        alert('Tidak ada bangunan OSM di AOI ini.');
-      }
-    } catch (e) {
-      console.error(e);
-      alert('Gagal ambil data OSM. Coba ulangi atau kecilkan AOI.');
-    } finally {
-      disable(btn, false);
+/* ===== Import/Export ===== */
+document.getElementById('xlsxInput').addEventListener('change', async ev=>{
+  const f=ev.target.files[0]; if(!f) return;
+  const buf=await f.arrayBuffer(); const wb=XLSX.read(buf,{type:'array'});
+  const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+  rows.forEach((r,i)=>{ const lat=parseFloat(r.Latitude??r.lat??r.Lat??r.Y), lon=parseFloat(r.Longitude??r.lon??r.Lon??r.X);
+    if(Number.isFinite(lat)&&Number.isFinite(lon)){
+      addPOI({Name:r.Name??r.POI_Name??`POI ${i+1}`, Address:r.Address??'', City:r.City??'', Status:r.Status??'', Latitude:lat, Longitude:lon, Photo:r.Photo??r['Link Picture']??''});
     }
-  };
+  });
+  if(poiCluster.getLayers().length) map.fitBounds(poiCluster.getBounds(),{padding:[30,30]});
+});
+document.getElementById('exportCsvBtn').onclick=()=>{
+  const rows=[...poiStore.values()].map(x=>x.props);
+  if(!rows.length) return alert('Tidak ada POI');
+  const headers=['id','Name','Address','City','Status','Latitude','Longitude','Photo'];
+  const csv=[headers.join(',')].concat(rows.map(r=>headers.map(h=>`"${(r[h]??'').toString().replace(/"/g,'""')}"`).join(','))).join('\n');
+  saveAs(new Blob([csv],{type:'text/csv;charset=utf-8'}),'poi_export.csv');
+};
+document.getElementById('exportGeoBtn').onclick=()=>{
+  const feats=[...poiStore.values()].map(r=>({type:'Feature',geometry:{type:'Point',coordinates:[Number(r.props.Longitude),Number(r.props.Latitude)]},properties:r.props}));
+  const fc={type:'FeatureCollection',features:feats};
+  saveAs(new Blob([JSON.stringify(fc,null,2)],{type:'application/geo+json'}),'poi_export.geojson');
+};
 
-  // Konverter OSM → GeoJSON sederhana (untuk way + nodes)
-  function osmtogeojson(osm) {
-    const nodes = new Map();
-    (osm.elements||[]).forEach(el => { if (el.type === 'node') nodes.set(el.id, [el.lon, el.lat]); });
-    const features = [];
-    (osm.elements||[]).forEach(el => {
-      if (el.type === 'way' && el.nodes && el.nodes.length >= 3) {
-        const coords = el.nodes.map(id => nodes.get(id)).filter(Boolean);
-        if (!coords.length) return;
-        const first = coords[0], last = coords[coords.length-1];
-        if (first[0] !== last[0] || first[1] !== last[1]) coords.push(first); // tutup ring
-        features.push({ type:'Feature', geometry:{ type:'Polygon', coordinates:[coords] }, properties: el.tags || {} });
-      }
-    });
-    return { type:'FeatureCollection', features };
+/* ===== OSM + AI points ===== */
+const overpassEndpoints=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.openstreetmap.ru/api/interpreter'];
+document.getElementById('fetchOSMBtn').onclick=fetchOSM;
+async function fetchOSM(){
+  let aoi=[...drawnItems.getLayers(),...aoiLayer.getLayers()].find(l=>l instanceof L.Polygon && !(l instanceof L.Polyline));
+  if(!aoi){ alert('Buat AOI dulu'); return; }
+  const ring=getRing(aoi); if(!ring||ring.length<3) return alert('AOI tidak valid');
+  const poly=ring.map(pt=>`${pt.lat} ${pt.lng}`).join(' ');
+  const query=`[out:json][timeout:60];way(poly:"${poly}")["building"];(._;>;);out body;`;
+  toast('Mengambil bangunan OSM…');
+  let data=null;
+  for(const url of overpassEndpoints){
+    try{ const res=await fetch(url,{method:'POST',body:query,headers:{'Content-Type':'text/plain'}}); if(res.ok){ data=await res.json(); if(data?.elements?.length) break; } }catch(e){}
   }
+  if(!data){ alert('Gagal ambil data OSM'); return; }
+  const gj=osm2geojson(data); buildingLayer.clearLayers(); buildingLayer.addData(gj);
+  if(buildingLayer.getLayers().length){ map.fitBounds(buildingLayer.getBounds(),{padding:[30,30]}); toast(`OK: ${buildingLayer.getLayers().length} bangunan.`); }
+}
+function osm2geojson(osm){
+  const nodes=new Map(); (osm.elements||[]).forEach(el=>{ if(el.type==='node') nodes.set(el.id,[el.lon,el.lat]); });
+  const features=[]; (osm.elements||[]).forEach(el=>{
+    if(el.type==='way'&&el.nodes?.length>=3){
+      const coords=el.nodes.map(id=>nodes.get(id)).filter(Boolean); if(!coords.length) return;
+      const f=coords[0], l=coords[coords.length-1]; if(f[0]!==l[0]||f[1]!==l[1]) coords.push(f);
+      features.push({type:'Feature',geometry:{type:'Polygon',coordinates:[coords]},properties:el.tags||{}});
+    }
+  }); return {type:'FeatureCollection',features};
+}
+document.getElementById('genHouseBtn').onclick=()=>{
+  if(!buildingLayer.getLayers().length) return alert('Ambil bangunan OSM dulu.');
+  aiCluster.clearLayers();
+  const gj=buildingLayer.toGeoJSON();
+  gj.features.forEach((f,i)=>{
+    if(!f.geometry) return;
+    const pt=turf.pointOnFeature(f); const [lon,lat]=pt.geometry.coordinates;
+    const props={Name:f.properties?.name||`Rumah #${i+1}`,Source:'OSM',Note:'Centroid-on-surface'};
+    const m=L.marker([lat,lon],{icon:iconAI}).bindPopup(`<b>${props.Name}</b><br><i>${props.Note}</i><br><small>${lat.toFixed(6)}, ${lon.toFixed(6)}</small>`);
+    aiCluster.addLayer(m);
+  });
+  if(aiCluster.getLayers().length) map.fitBounds(aiCluster.getBounds(),{padding:[30,30]});
+};
 
-  // ====== GEO-AI: TITIK RUMAH (centroid-on-surface setiap bangunan) ======
-  document.getElementById('genHouseBtn').onclick = () => {
-    if (!buildingLayer.getLayers().length) return alert('Layer bangunan OSM kosong. Klik dulu "Ambil Bangunan OSM".');
-    housePointLayer.clearLayers();
+/* ===== Clean buttons ===== */
+document.getElementById('clearAOIBtn').onclick=()=>aoiLayer.clearLayers();
+document.getElementById('clearPOIBtn').onclick=()=>{ poiCluster.clearLayers(); poiStore.clear(); refreshTable(); };
+document.getElementById('clearBldBtn').onclick=()=>buildingLayer.clearLayers();
+document.getElementById('clearAIBtn').onclick=()=>aiCluster.clearLayers();
 
-    const gj = buildingLayer.toGeoJSON();
-    gj.features.forEach((f, i) => {
-      if (f.geometry && (f.geometry.type === 'Polygon' || f.geometry.type === 'MultiPolygon')) {
-        const pt = turf.pointOnFeature(f);
-        const [lon, lat] = pt.geometry.coordinates;
-        const props = { Name: f.properties?.name || `Rumah #${i+1}`, Source: 'OSM', Note: 'Titik pusat atap (centroid-on-surface)' };
-        const m = L.marker([lat, lon], { icon: iconAI }).bindPopup(buildPopup({ Name: props.Name, Status: props.Note, Latitude: lat, Longitude: lon }));
-        m.feature = { type:'Feature', geometry:{ type:'Point', coordinates:[lon, lat] }, properties: props };
-        housePointLayer.addLayer(m);
-      }
-    });
+/* ===== Popup & modal form ===== */
+function buildPopup(p){
+  const img=p.Photo?`<div style="margin-top:6px"><img src="${p.Photo}" style="max-width:180px;border-radius:8px"></div>`:'';
+  return `<div style="min-width:220px"><b>${p.Name||'(tanpa nama)'}</b><br>${p.Address?p.Address+'<br>':''}${p.City?p.City+'<br>':''}${p.Status?'<i>Status: '+p.Status+'</i><br>':''}<small>${(+p.Latitude).toFixed(6)}, ${(+p.Longitude).toFixed(6)}</small>${img}</div>`;
+}
+const modal=document.getElementById('poiModal');
+const f={name:document.getElementById('f_name'), addr:document.getElementById('f_addr'), city:document.getElementById('f_city'),
+         status:document.getElementById('f_status'), lat:document.getElementById('f_lat'), lon:document.getElementById('f_lon'), photo:document.getElementById('f_photo')};
+let modalMode='add', editId=null;
+function openPOIModal(mode,data){
+  modalMode=mode; document.getElementById('poiModalTitle').textContent=(mode==='add'?'Tambah':'Edit')+' POI';
+  document.getElementById('poiDelete').style.display=(mode==='edit'?'inline-block':'none');
+  if(mode==='edit' && data){ const p=data.props; editId=data.id; f.name.value=p.Name||''; f.addr.value=p.Address||''; f.city.value=p.City||''; f.status.value=p.Status||''; f.lat.value=p.Latitude||''; f.lon.value=p.Longitude||''; f.photo.value=p.Photo||''; }
+  else { editId=null; for(const k in f) f[k].value=''; }
+  modal.style.display='flex';
+}
+document.getElementById('addPOIBtn').onclick=()=>openPOIModal('add');
+document.getElementById('poiCancel').onclick=()=>modal.style.display='none';
+document.getElementById('poiDelete').onclick=()=>{ if(editId!=null){ deletePOI(editId); modal.style.display='none'; } };
+document.getElementById('poiSave').onclick=()=>{
+  const props={Name:f.name.value, Address:f.addr.value, City:f.city.value, Status:f.status.value, Latitude:parseFloat(f.lat.value), Longitude:parseFloat(f.lon.value), Photo:f.photo.value};
+  if(modalMode==='add') addPOI(props); else if(editId!=null) updatePOI(editId,props);
+  modal.style.display='none';
+};
 
-    if (housePointLayer.getLayers().length) {
-      map.fitBounds(housePointLayer.getBounds(), { padding:[30,30] });
-      toast(`Tercipta ${housePointLayer.getLayers().length} titik rumah.`);
-    } else alert('Tidak ada poligon bangunan valid.');
-  };
+/* ===== AI Chat (rule-based command parser) ===== */
+function chatAdd(role,text){ const log=document.getElementById('chatlog'); const div=document.createElement('div'); div.className='msg '+(role==='ai'?'ai':'me'); div.textContent=text; log.appendChild(div); log.scrollTop=log.scrollHeight; }
+async function runCommand(cmd){
+  const lc=cmd.trim().toLowerCase();
+  // buat aoi bbox=lon,lat,lon,lat
+  if(lc.startsWith('buat aoi bbox=')){ const s=cmd.split('bbox=')[1].trim(); const p=s.split(',').map(x=>Number(x.trim())); if(p.length===4&&!p.some(isNaN)){ aoiLayer.clearLayers(); addBboxToAOI(...p); return 'AOI dari BBOX dibuat.'; } return 'Format BBOX salah.';
+  }
+  // buat aoi poly=lat,lon;lat,lon;...
+  if(lc.startsWith('buat aoi poly=')){ const s=cmd.split('poly=')[1].trim(); const pts=s.split(';').map(t=>t.split(',').map(Number)); if(pts.length>=3){ const poly=L.polygon(pts.map(([a,b])=>[a,b]),{color:'#ffa600',weight:2,fillOpacity:.15}); aoiLayer.clearLayers(); aoiLayer.addLayer(poly); map.fitBounds(poly.getBounds(),{padding:[30,30]}); return 'AOI polygon dibuat.'; } return 'Minimal 3 titik.'; }
+  if(lc==='ambil osm'){ await fetchOSM(); return 'Selesai ambil OSM (cek peta).'; }
+  if(lc==='ai rumah' || lc==='geoai rumah'){ document.getElementById('genHouseBtn').click(); return 'Titik rumah dibuat.'; }
+  if(lc.startsWith('tambah poi')){ // tambah poi name="A" lat=.. lon=..
+    const m=cmd.match(/name="?([^"]+)"?.*?\blat\s*=\s*([0-9.+-]+).*?\blon[g]?\s*=\s*([0-9.+-]+)/i);
+    if(m){ addPOI({Name:m[1],Latitude:parseFloat(m[2]),Longitude:parseFloat(m[3])}); return 'POI ditambahkan.'; }
+    return 'Gunakan: tambah poi name="Nama" lat=.. lon=..';
+  }
+  if(lc.startsWith('edit poi')){ // edit poi id=.. name="B" ...
+    const idm=cmd.match(/\bid\s*=\s*(\d+)/i); if(!idm) return 'Sertakan id=...';
+    const id=Number(idm[1]); const cur=poiStore.get(id); if(!cur) return 'ID tidak ditemukan.';
+    const n=cmd.match(/name="?([^"]+)"/i); const lt=cmd.match(/\blat\s*=\s*([0-9.+-]+)/i); const ln=cmd.match(/\blon[g]?\s*=\s*([0-9.+-]+)/i);
+    const up={}; if(n) up.Name=n[1]; if(lt) up.Latitude=parseFloat(lt[1]); if(ln) up.Longitude=parseFloat(ln[1]);
+    updatePOI(id,up); return 'POI diupdate.';
+  }
+  if(lc.startsWith('hapus poi')){ const idm=cmd.match(/\bid\s*=\s*(\d+)/i); if(!idm) return 'Sertakan id=...'; deletePOI(Number(idm[1])); return 'POI dihapus.'; }
+  if(lc==='ekspor csv'){ document.getElementById('exportCsvBtn').click(); return 'Mengunduh CSV…'; }
+  if(lc==='ekspor geojson'){ document.getElementById('exportGeoBtn').click(); return 'Mengunduh GeoJSON…'; }
+  if(lc==='bantuan' || lc==='help'){
+    return 'Perintah: "buat aoi bbox=lon,lat,lon,lat" • "buat aoi poly=lat,lon;..." • "ambil osm" • "ai rumah" • "tambah poi name="Nama" lat=.. lon=.." • "edit poi id=.. name=.. lat=.. lon=.." • "hapus poi id=.." • "ekspor csv|geojson"';
+  }
+  return 'Tidak dikenali. Ketik "bantuan".';
+}
+document.getElementById('chatSend').onclick=async ()=>{
+  const inp=document.getElementById('chatInput'); const txt=inp.value.trim(); if(!txt) return;
+  chatAdd('me',txt); inp.value=''; const out=await runCommand(txt); chatAdd('ai',out);
+};
 
-  // ====== BERSIHKAN ======
-  document.getElementById('clearAOIBtn').onclick = () => aoiLayer.clearLayers();
-  document.getElementById('clearPOIBtn').onclick = () => poiExcelLayer.clearLayers();
-  document.getElementById('clearBldBtn').onclick = () => buildingLayer.clearLayers();
-  document.getElementById('clearAIBtn').onclick = () => housePointLayer.clearLayers();
-  document.getElementById('clearDrawBtn').onclick = () => drawnItems.clearLayers();
+/* ===== Init: AOI KL Sentral ===== */
+addBboxToAOI(...KL_BBOX);
+toast('AOI default: KL Sentral. Siap!');
 
-  // ====== AUTO-INISIASI: tambah AOI KL Sentral di awal ======
-  (function initKLSentral(){
-    addBboxToAOI(...KL_BBOX);
-    toast('AOI default: KL Sentral.');
-  })();
+function buildPopupMini(name,lat,lon){return `<b>${name}</b><br><small>${lat.toFixed(6)}, ${lon.toFixed(6)}</small>`;}
+function buildPopup(p){ const img=p.Photo?`<div style="margin-top:6px"><img src="${p.Photo}" style="max-width:180px;border-radius:8px"></div>`:''; return `<div style="min-width:220px"><b>${p.Name||'(tanpa nama)'}</b><br>${p.Address?p.Address+'<br>':''}${p.City?p.City+'<br>':''}${p.Status?'<i>Status: '+p.Status+'</i><br>':''}<small>${(+p.Latitude).toFixed(6)}, ${(+p.Longitude).toFixed(6)}</small>${img}</div>`;}
 </script>
 </body>
 </html>
