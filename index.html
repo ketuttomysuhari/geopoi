@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
   <meta charset="utf-8" />
-  <title>MyMap POI • Excel Import/Export + GeoAI Rumah</title>
+  <title>MyMap POI • Excel Import/Export + AOI Manual + OSM + Geo-AI Rumah</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- Leaflet & Leaflet.Draw -->
@@ -26,18 +26,24 @@
       position:absolute; z-index:1000; top:10px; left:10px;
       background:rgba(20,20,24,.92); color:#fff; padding:12px 14px;
       border-radius:12px; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      box-shadow:0 8px 24px rgba(0,0,0,.25); max-width: 380px;
+      box-shadow:0 8px 24px rgba(0,0,0,.25); max-width: 420px;
     }
     .panel h3 { margin:0 0 8px; font-size:16px; }
     .panel .row { display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:8px; }
-    .panel input[type="file"] { display:block; }
+    .panel input[type="file"], .panel input[type="text"], .panel textarea { width:100%; }
+    .panel input[type="text"], .panel textarea {
+      background:#121317; border:1px solid #2a2d36; color:#fff; border-radius:10px;
+      padding:8px 10px; outline:none;
+    }
+    .panel textarea { min-height:60px; resize:vertical }
+    .panel label { font-weight:600; display:block }
+    .panel small { opacity:.8 }
     .panel button {
       border:0; padding:8px 10px; border-radius:10px; cursor:pointer;
       background:#2d6cdf; color:#fff; font-weight:600;
     }
     .panel button.secondary{ background:#444; }
     .panel button.warn{ background:#d94848; }
-    .panel .hint { font-size:12px; opacity:.8; margin-top:6px }
     .legend {
       position:absolute; right:10px; bottom:10px; z-index:1000;
       background:rgba(255,255,255,.95); color:#111; padding:10px 12px; border-radius:10px;
@@ -48,53 +54,71 @@
     .dot.poi { background:#2d6cdf }
     .dot.ai { background:#22a06b }
     .dot.bld { background:#a278ff }
+    .dot.aoi { background:#ffa600 }
   </style>
 </head>
 <body>
   <div id="map"></div>
 
   <div class="panel">
-    <h3>MyMap – POI & Geo-AI Rumah</h3>
+    <h3>MyMap – POI, AOI, OSM & Geo-AI</h3>
 
+    <!-- AOI dari koordinat manual -->
+    <div class="row" style="width:100%">
+      <label>Buat AOI dari Koordinat (lat,lon; lat,lon; ...)</label>
+      <textarea id="coordsInput" placeholder="Contoh:
+3.1569,101.7098;3.1578,101.7170;3.1612,101.7160;3.1602,101.7092"></textarea>
+      <div style="display:flex; gap:8px; width:100%">
+        <button id="addAoiBtn" class="secondary" title="Tambah polygon AOI dari daftar koordinat">Tambah AOI</button>
+        <input id="bboxInput" type="text" placeholder="atau BBOX: minLon,minLat,maxLon,maxLat (opsional)">
+        <button id="addBboxBtn" class="secondary" title="Tambah rectangle dari BBOX">Tambah AOI dari BBOX</button>
+      </div>
+      <small>Tips: minimal 3 titik untuk polygon. Format decimal degrees. BBOX contoh: <i>101.71,3.155,101.72,3.165</i></small>
+    </div>
+
+    <!-- Impor/ekspor -->
     <div class="row">
       <label><b>Impor Excel (.xlsx)</b></label>
       <input id="xlsxInput" type="file" accept=".xlsx,.xls" />
     </div>
-
     <div class="row">
       <button id="exportCsvBtn">Ekspor CSV</button>
       <button id="exportGeoBtn" class="secondary">Ekspor GeoJSON</button>
     </div>
 
+    <!-- OSM & Geo-AI -->
     <div class="row">
       <button id="fetchOSMBtn">Ambil Bangunan OSM (dalam AOI)</button>
       <button id="genHouseBtn">Geo-AI: Titik Rumah</button>
     </div>
 
+    <!-- Bersihkan -->
     <div class="row">
+      <button id="clearAOIBtn" class="secondary">Bersihkan AOI</button>
       <button id="clearPOIBtn" class="secondary">Bersihkan POI Excel</button>
       <button id="clearBldBtn" class="secondary">Bersihkan Bangunan</button>
       <button id="clearAIBtn" class="secondary">Bersihkan Titik Rumah</button>
       <button id="clearDrawBtn" class="warn">Bersihkan Gambar</button>
     </div>
 
-    <div class="hint">
-      1) Gambar polygon AOI di peta<br/>
-      2) Klik “Ambil Bangunan OSM” → “Geo-AI: Titik Rumah”<br/>
-      3) Impor Excel untuk tampilkan POI Anda (Nama, Lat, Lon, …)<br/>
-      4) Ekspor ke CSV/GeoJSON kapan saja
+    <div class="row" style="margin-top:-2px">
+      <small>
+        1) Gambar atau input AOI → 2) “Ambil Bangunan OSM” → 3) “Geo-AI: Titik Rumah” →
+        4) Impor Excel POI → 5) Ekspor CSV/GeoJSON
+      </small>
     </div>
   </div>
 
   <div class="legend">
-    <div class="k"><span class="dot poi"></span> POI dari Excel / Manual</div>
+    <div class="k"><span class="dot aoi"></span> AOI (gambar / input koordinat)</div>
     <div class="k"><span class="dot bld"></span> Footprint Bangunan OSM</div>
     <div class="k"><span class="dot ai"></span> Titik Rumah (Geo-AI)</div>
+    <div class="k"><span class="dot poi"></span> POI dari Excel / Manual</div>
   </div>
 
 <script>
   // ====== PETA & LAYER DASAR ======
-  const map = L.map('map', { center:[3.1579, 101.7123], zoom: 13 }); // KL default
+  const map = L.map('map', { center:[3.1579, 101.7116], zoom: 15 }); // KLCC default
 
   const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
     attribution: '&copy; Esri'
@@ -104,27 +128,34 @@
     attribution:'&copy; OpenStreetMap'
   });
 
-  const drawnItems = new L.FeatureGroup(); // garis/polygon/point yang Anda gambar
+  const drawnItems = new L.FeatureGroup(); // garis/polygon/point yang digambar
   map.addLayer(drawnItems);
 
-  const poiExcelLayer = L.layerGroup().addTo(map);     // marker dari Excel
+  const aoiLayer = L.layerGroup().addTo(map);           // AOI dari input manual
+  const poiExcelLayer = L.layerGroup().addTo(map);      // marker dari Excel
   const buildingLayer = L.geoJSON(null, {
     style: { color:'#7a5cff', weight:1, fillOpacity:0.25 }
   }).addTo(map);
-  const housePointLayer = L.layerGroup().addTo(map);   // titik rumah hasil Geo-AI
+  const housePointLayer = L.layerGroup().addTo(map);    // titik rumah hasil Geo-AI
 
   L.control.layers(
     { 'ESRI World Imagery': esri, 'OSM Streets': osm },
-    { 'Drawn': drawnItems, 'POI Excel': poiExcelLayer, 'Bangunan OSM': buildingLayer, 'Titik Rumah (AI)': housePointLayer },
+    {
+      'AOI (Manual)': aoiLayer,
+      'Drawn (Gambar)': drawnItems,
+      'Bangunan OSM': buildingLayer,
+      'Titik Rumah (AI)': housePointLayer,
+      'POI Excel': poiExcelLayer
+    },
     { collapsed: true }
   ).addTo(map);
 
   // ====== KONTROL DRAW ======
   const drawControl = new L.Control.Draw({
     draw: {
-      polygon: { allowIntersection:false, showArea:true },
+      polygon: { allowIntersection:false, showArea:true, shapeOptions:{ color:'#ffa600' } },
+      rectangle: { shapeOptions:{ color:'#ffa600' } },
       polyline: true,
-      rectangle: true,
       circle: false,
       marker: true,
       circlemarker: false
@@ -134,6 +165,9 @@
   map.addControl(drawControl);
 
   map.on(L.Draw.Event.CREATED, e => {
+    if ((e.layer instanceof L.Polygon) && !(e.layer instanceof L.Polyline)) {
+      e.layer.setStyle?.({ color:'#ffa600' });
+    }
     drawnItems.addLayer(e.layer);
   });
 
@@ -157,17 +191,73 @@
     `;
   }
 
-  function markerStyle(className) {
+  function markerDot(colorHex) {
     return L.divIcon({
       className: '',
       html: `<span style="
         display:inline-block;width:12px;height:12px;border-radius:50%;
-        background:${className==='ai' ? '#22a06b' : '#2d6cdf'};
+        background:${colorHex};
         border:2px solid #fff; box-shadow:0 0 0 2px rgba(0,0,0,.25)
       "></span>`,
       iconSize:[12,12], iconAnchor:[6,6]
     });
   }
+  const iconPOI = markerDot('#2d6cdf');
+  const iconAI  = markerDot('#22a06b');
+
+  function firstPolygonOrRectangle(groupOrLayer) {
+    let found = null;
+    const scan = lay => {
+      if (!found && lay instanceof L.LayerGroup) lay.eachLayer(scan);
+      else if (!found && (lay instanceof L.Polygon) && !(lay instanceof L.Polyline)) found = lay;
+    };
+    scan(groupOrLayer);
+    return found;
+  }
+
+  // ====== AOI dari KOORDINAT MANUAL ======
+  const coordsInput = document.getElementById('coordsInput');
+  document.getElementById('addAoiBtn').onclick = () => {
+    const val = coordsInput.value.trim();
+    if (!val) return alert('Masukkan koordinat lat,lon; lat,lon; ...');
+
+    try {
+      const coords = val
+        .split(';')
+        .map(c => c.split(',').map(s => Number(s.trim())))
+        .filter(a => a.length===2 && Number.isFinite(a[0]) && Number.isFinite(a[1]))
+        .map(([lat, lon]) => [lat, lon]);
+
+      if (coords.length < 3) return alert('Minimal 3 titik untuk polygon AOI.');
+      const poly = L.polygon(coords, { color:'#ffa600', weight:2, fillOpacity:0.15 });
+      aoiLayer.addLayer(poly);
+      map.fitBounds(poly.getBounds(), { padding:[30,30] });
+    } catch(e) {
+      console.error(e);
+      alert('Format salah! Gunakan: lat,lon;lat,lon;lat,lon');
+    }
+  };
+
+  // ====== AOI dari BBOX ======
+  document.getElementById('addBboxBtn').onclick = () => {
+    const v = document.getElementById('bboxInput').value.trim();
+    if (!v) return alert('Masukkan BBOX: minLon,minLat,maxLon,maxLat');
+    const parts = v.split(',').map(s => Number(s.trim()));
+    if (parts.length !== 4 || parts.some(n => !Number.isFinite(n))) {
+      return alert('Format BBOX salah. Contoh: 101.71,3.155,101.72,3.165');
+    }
+    const [minLon, minLat, maxLon, maxLat] = parts;
+    if (minLon>=maxLon || minLat>=maxLat) return alert('Nilai BBOX tidak valid.');
+
+    const rect = L.polygon([
+      [minLat, minLon],
+      [minLat, maxLon],
+      [maxLat, maxLon],
+      [maxLat, minLon]
+    ], { color:'#ffa600', weight:2, fillOpacity:0.15 });
+    aoiLayer.addLayer(rect);
+    map.fitBounds(rect.getBounds(), { padding:[30,30] });
+  };
 
   // ====== IMPOR EXCEL ======
   const xlsxInput = document.getElementById('xlsxInput');
@@ -183,7 +273,7 @@
     const ws = wb.Sheets[sheetName];
     const rows = XLSX.utils.sheet_to_json(ws, { defval:'' });
 
-    // Ekspektasi kolom minimal: Name, Latitude, Longitude
+    // Ekspektasi minimal: Name, Latitude, Longitude
     // Opsional: Address, City, Status, Photo
     poiExcelLayer.clearLayers();
 
@@ -199,13 +289,12 @@
           Latitude: lat, Longitude: lon,
           Photo: r.Photo ?? r['Link Picture'] ?? ''
         };
-        const m = L.marker([lat, lon], { icon: markerStyle('poi') }).bindPopup(buildPopup(props));
+        const m = L.marker([lat, lon], { icon: iconPOI }).bindPopup(buildPopup(props));
         m.feature = { type:'Feature', geometry:{ type:'Point', coordinates:[lon, lat] }, properties: props };
         poiExcelLayer.addLayer(m);
       }
     });
 
-    // Zoom ke data impor
     if (poiExcelLayer.getLayers().length) {
       map.fitBounds(poiExcelLayer.getBounds(), { padding:[30,30] });
     } else {
@@ -218,19 +307,19 @@
     const rows = [];
     poiExcelLayer.eachLayer(m => {
       const p = (m.feature && m.feature.properties) || {};
+      const ll = m.getLatLng();
       rows.push({
         Name: p.Name || '',
         Address: p.Address || '',
         City: p.City || '',
         Status: p.Status || '',
-        Latitude: p.Latitude || (m.getLatLng()?.lat ?? ''),
-        Longitude: p.Longitude || (m.getLatLng()?.lng ?? ''),
+        Latitude: p.Latitude || (ll?.lat ?? ''),
+        Longitude: p.Longitude || (ll?.lng ?? ''),
         Photo: p.Photo || ''
       });
     });
     if (!rows.length) { alert('Layer POI kosong.'); return; }
 
-    // Build CSV manual
     const headers = Object.keys(rows[0]);
     const csv = [headers.join(',')].concat(
       rows.map(r => headers.map(h => {
@@ -261,12 +350,16 @@
 
   // ====== AMBIL BANGUNAN OSM via Overpass API (dalam AOI) ======
   document.getElementById('fetchOSMBtn').onclick = async () => {
-    const aoi = firstPolygonOrRectangle(drawnItems);
-    if (!aoi) { alert('Gambar polygon/rectangle sebagai AOI terlebih dahulu.'); return; }
+    // Ambil AOI dari: 1) layer gambar (drawnItems) atau 2) AOI manual (aoiLayer) — prioritas: drawnItems
+    let aoi = firstPolygonOrRectangle(drawnItems);
+    if (!aoi) aoi = firstPolygonOrRectangle(aoiLayer);
+    if (!aoi) { alert('Buat AOI dulu (gambar atau input koordinat/BBOX).'); return; }
 
     try {
-      const poly = aoi.getLatLngs()[0]; // asumsi 1 ring
-      const overpassPoly = poly.map(pt => `${pt.lat} ${pt.lng}`).join(' ');
+      const polyLatLng = aoi.getLatLngs();
+      // dukung polygon/rectangle standard: bisa jadi array bertingkat
+      const ring = Array.isArray(polyLatLng[0]) ? polyLatLng[0] : polyLatLng;
+      const overpassPoly = ring.map(pt => `${pt.lat} ${pt.lng}`).join(' ');
       const query = `
 [out:json][timeout:60];
 way(poly:"${overpassPoly}")["building"];
@@ -279,7 +372,6 @@ out body;
       if (!res.ok) throw new Error('Overpass API error');
       const data = await res.json();
 
-      // Konversi OSM JSON → GeoJSON sederhana
       const gj = osmtogeojson(data);
       buildingLayer.clearLayers();
       buildingLayer.addData(gj);
@@ -295,8 +387,7 @@ out body;
     }
   };
 
-  // Konverter OSM → GeoJSON mini (pakai fungsi ringan)
-  // Sumber: adaptasi sederhana untuk case "way + nodes"
+  // Konverter OSM → GeoJSON sederhana (untuk way + nodes)
   function osmtogeojson(osm) {
     const nodes = new Map();
     (osm.elements||[]).forEach(el => {
@@ -306,10 +397,10 @@ out body;
     (osm.elements||[]).forEach(el => {
       if (el.type === 'way' && el.nodes && el.nodes.length >= 3) {
         const coords = el.nodes.map(id => nodes.get(id)).filter(Boolean);
-        // tutup ring
-        if (coords.length && (coords[0][0] !== coords[coords.length-1][0] || coords[0][1] !== coords[coords.length-1][1])) {
-          coords.push(coords[0]);
-        }
+        if (!coords.length) return;
+        const first = coords[0];
+        const last  = coords[coords.length-1];
+        if (first[0] !== last[0] || first[1] !== last[1]) coords.push(first); // tutup ring
         features.push({
           type:'Feature',
           geometry:{ type:'Polygon', coordinates:[coords] },
@@ -318,14 +409,6 @@ out body;
       }
     });
     return { type:'FeatureCollection', features };
-  }
-
-  function firstPolygonOrRectangle(group) {
-    let found = null;
-    group.eachLayer(l => {
-      if (!found && (l instanceof L.Polygon) && !(l instanceof L.Polyline)) found = l;
-    });
-    return found;
   }
 
   // ====== GEO-AI: TITIK RUMAH (centroid-on-surface setiap bangunan) ======
@@ -343,7 +426,7 @@ out body;
           Source: 'OSM',
           Note: 'Titik pusat atap (centroid-on-surface)'
         };
-        const m = L.marker([lat, lon], { icon: markerStyle('ai') }).bindPopup(buildPopup({
+        const m = L.marker([lat, lon], { icon: iconAI }).bindPopup(buildPopup({
           Name: props.Name, Status: props.Note, Latitude: lat, Longitude: lon
         }));
         m.feature = { type:'Feature', geometry:{ type:'Point', coordinates:[lon, lat] }, properties: props };
@@ -360,6 +443,7 @@ out body;
   };
 
   // ====== BERSIHKAN ======
+  document.getElementById('clearAOIBtn').onclick = () => aoiLayer.clearLayers();
   document.getElementById('clearPOIBtn').onclick = () => poiExcelLayer.clearLayers();
   document.getElementById('clearBldBtn').onclick = () => buildingLayer.clearLayers();
   document.getElementById('clearAIBtn').onclick = () => housePointLayer.clearLayers();
