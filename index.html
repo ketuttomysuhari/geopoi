@@ -2,7 +2,7 @@
 <html lang="id">
 <head>
 <meta charset="utf-8" />
-<title>MyMap • POI + Cluster + Table + AI Chat + OSM</title>
+<title>MyMap • POI + Cluster + Table + AI + OSM (Chunked)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 
 <!-- Leaflet & Draw -->
@@ -29,7 +29,7 @@
 <style>
   html,body,#map{height:100%;margin:0}
   /* Panels */
-  .panel{position:absolute;z-index:1000;top:10px;left:10px;background:rgba(20,20,24,.92);color:#fff;padding:12px 14px;border-radius:12px;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:520px}
+  .panel{position:absolute;z-index:1000;top:10px;left:10px;background:rgba(20,20,24,.92);color:#fff;padding:12px 14px;border-radius:12px;font:14px/1.4 system-ui,-apple-system,Segoe UI,Roboto,Arial;box-shadow:0 8px 24px rgba(0,0,0,.25);max-width:560px}
   .panel h3{margin:0 0 8px;font-size:16px}
   .panel .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:8px}
   .panel input,.panel textarea,.panel select{background:#121317;border:1px solid #2a2d36;color:#fff;border-radius:10px;padding:8px 10px;outline:none}
@@ -37,6 +37,7 @@
   .panel button{border:0;padding:8px 10px;border-radius:10px;cursor:pointer;background:#2d6cdf;color:#fff;font-weight:600}
   .panel button.secondary{background:#444}
   .panel button.warn{background:#d94848}
+  .panel button:disabled{opacity:.6;cursor:not-allowed}
   .panel small{opacity:.8}
   .legend{position:absolute;right:10px;bottom:10px;z-index:1000;background:rgba(255,255,255,.95);color:#111;padding:10px 12px;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);font:13px/1.4 system-ui}
   .legend .k{display:flex;gap:8px;align-items:center;margin:6px 0}
@@ -59,7 +60,7 @@
   .chat{display:flex;flex-direction:column;height:100%}
   .chatlog{flex:1;overflow:auto;border:1px solid #eee;border-radius:8px;padding:8px;background:#fafafa}
   .chatlog .ai{background:#eef4ff}.chatlog .me{background:#f6f7f8}
-  .chatlog .msg{padding:6px 8px;border-radius:8px;margin:4px 0;font:13px/1.35 system-ui}
+  .chatlog .msg{padding:6px 8px;border-radius:8px;margin:4px 0;font:13px/1.35 system-ui;white-space:pre-wrap}
   .chatbar{display:flex;gap:8px;margin-top:8px}
   .chatbar input{flex:1;padding:8px 10px;border-radius:10px;border:1px solid #ddd}
 </style>
@@ -69,7 +70,7 @@
 
 <!-- Left control panel -->
 <div class="panel">
-  <h3>MyMap — POI, Cluster, Table & AI</h3>
+  <h3>MyMap — POI, Cluster, Table, AI & OSM</h3>
 
   <div class="row" style="width:100%">
     <button id="klBtn" class="secondary">KL Sentral AOI</button>
@@ -97,8 +98,14 @@
   </div>
 
   <div class="row">
-    <button id="fetchOSMBtn">Ambil Bangunan OSM (dalam AOI)</button>
+    <button id="fetchOSMBtn">Ambil Bangunan OSM</button>
+    <button id="fetchOSMChunkBtn">Ambil OSM (Chunked)</button>
     <button id="genHouseBtn">Geo-AI: Titik Rumah</button>
+  </div>
+
+  <div class="row">
+    <input id="bldGeoJSON" type="file" accept=".geojson,application/geo+json" />
+    <button id="importBldBtn" class="secondary">Impor Bangunan (GeoJSON)</button>
   </div>
 
   <div class="row">
@@ -133,7 +140,7 @@
       <input id="chatInput" placeholder='contoh: ambil osm; tambah poi name="Titik A" lat=3.134 lon=101.686; buat aoi bbox=101.682,3.130,101.691,3.139'>
       <button id="chatSend">Kirim</button>
     </div>
-    <small>Perintah: <code>buat aoi bbox=...</code> • <code>buat aoi poly=lat,lon;...</code> • <code>ambil osm</code> • <code>ai rumah</code> • <code>tambah poi name=.. lat=.. lon=..</code> • <code>edit poi id=.. name=..</code> • <code>hapus poi id=..</code> • <code>ekspor csv|geojson</code></small>
+    <small>Perintah: <code>buat aoi bbox=...</code> • <code>buat aoi poly=lat,lon;...</code> • <code>ambil osm</code> • <code>ambil osm chunked</code> • <code>ai rumah</code> • <code>tambah poi name="..." lat=.. lon=..</code> • <code>edit poi id=.. name=..</code> • <code>hapus poi id=..</code> • <code>ekspor csv|geojson</code></small>
   </div>
 </div>
 
@@ -211,6 +218,7 @@ const poiTable=$('#poiTable').DataTable({
   data:[], paging:true, pageLength:8, searching:true, order:[[0,'asc']]
 });
 function refreshTable(){ const rows=[...poiStore.values()].map(x=>({id:x.id,props:x.props})); poiTable.clear().rows.add(rows).draw(); document.getElementById('poiCount').textContent=rows.length; }
+function buildPopup(p){ const img=p.Photo?`<div style="margin-top:6px"><img src="${p.Photo}" style="max-width:180px;border-radius:8px"></div>`:''; return `<div style="min-width:220px"><b>${p.Name||'(tanpa nama)'}</b><br>${p.Address?p.Address+'<br>':''}${p.City?p.City+'<br>':''}${p.Status?'<i>Status: '+p.Status+'</i><br>':''}<small>${(+p.Latitude).toFixed(6)}, ${(+p.Longitude).toFixed(6)}</small>${img}</div>`; }
 function addPOI(props){
   const id=props.id ?? seqId++;
   const lat=Number(props.Latitude), lon=Number(props.Longitude);
@@ -235,10 +243,7 @@ function deletePOI(id){
   refreshTable();
 }
 /* table <-> map sync */
-$('#poiTable tbody').on('click','tr',function(){
-  const data=poiTable.row(this).data(); if(!data) return;
-  const rec=poiStore.get(Number(data.id)); if(rec){ map.flyTo(rec.marker.getLatLng(),19); rec.marker.openPopup(); }
-});
+$('#poiTable tbody').on('click','tr',function(){ const data=poiTable.row(this).data(); if(!data) return; const rec=poiStore.get(Number(data.id)); if(rec){ map.flyTo(rec.marker.getLatLng(),19); rec.marker.openPopup(); }});
 
 /* ===== Import/Export ===== */
 document.getElementById('xlsxInput').addEventListener('change', async ev=>{
@@ -265,7 +270,28 @@ document.getElementById('exportGeoBtn').onclick=()=>{
   saveAs(new Blob([JSON.stringify(fc,null,2)],{type:'application/geo+json'}),'poi_export.geojson');
 };
 
-/* ===== OSM + AI points ===== */
+/* ===== OSM helper: converter keeps _osm_id for dedup ===== */
+function osmtogeojson(osm) {
+  const nodes = new Map();
+  (osm.elements||[]).forEach(el => { if (el.type === 'node') nodes.set(el.id, [el.lon, el.lat]); });
+  const features = [];
+  (osm.elements||[]).forEach(el => {
+    if (el.type === 'way' && el.nodes && el.nodes.length >= 3) {
+      const coords = el.nodes.map(id => nodes.get(id)).filter(Boolean);
+      if (!coords.length) return;
+      const first = coords[0], last = coords[coords.length-1];
+      if (first[0] !== last[0] || first[1] !== last[1]) coords.push(first);
+      features.push({
+        type:'Feature',
+        geometry:{ type:'Polygon', coordinates:[coords] },
+        properties: Object.assign({ _osm_id: el.id }, el.tags || {})
+      });
+    }
+  });
+  return { type:'FeatureCollection', features };
+}
+
+/* ===== OSM fetch (single polygon) ===== */
 const overpassEndpoints=['https://overpass-api.de/api/interpreter','https://overpass.kumi.systems/api/interpreter','https://overpass.openstreetmap.ru/api/interpreter'];
 document.getElementById('fetchOSMBtn').onclick=fetchOSM;
 async function fetchOSM(){
@@ -275,26 +301,111 @@ async function fetchOSM(){
   const poly=ring.map(pt=>`${pt.lat} ${pt.lng}`).join(' ');
   const query=`[out:json][timeout:60];way(poly:"${poly}")["building"];(._;>;);out body;`;
   toast('Mengambil bangunan OSM…');
-  let data=null;
+  let data=null, lastErr=null;
   for(const url of overpassEndpoints){
-    try{ const res=await fetch(url,{method:'POST',body:query,headers:{'Content-Type':'text/plain'}}); if(res.ok){ data=await res.json(); if(data?.elements?.length) break; } }catch(e){}
+    try{ const res=await fetch(url,{method:'POST',body:query,headers:{'Content-Type':'text/plain'}}); if(!res.ok) throw new Error(`HTTP ${res.status}`); data=await res.json(); if(data?.elements?.length) break; }
+    catch(e){ lastErr=e; }
   }
-  if(!data){ alert('Gagal ambil data OSM'); return; }
-  const gj=osm2geojson(data); buildingLayer.clearLayers(); buildingLayer.addData(gj);
+  if(!data){ alert('Gagal ambil data OSM'); console.error(lastErr); return; }
+  const gj=osmtogeojson(data); buildingLayer.clearLayers(); buildingLayer.addData(gj);
   if(buildingLayer.getLayers().length){ map.fitBounds(buildingLayer.getBounds(),{padding:[30,30]}); toast(`OK: ${buildingLayer.getLayers().length} bangunan.`); }
 }
-function osm2geojson(osm){
-  const nodes=new Map(); (osm.elements||[]).forEach(el=>{ if(el.type==='node') nodes.set(el.id,[el.lon,el.lat]); });
-  const features=[]; (osm.elements||[]).forEach(el=>{
-    if(el.type==='way'&&el.nodes?.length>=3){
-      const coords=el.nodes.map(id=>nodes.get(id)).filter(Boolean); if(!coords.length) return;
-      const f=coords[0], l=coords[coords.length-1]; if(f[0]!==l[0]||f[1]!==l[1]) coords.push(f);
-      features.push({type:'Feature',geometry:{type:'Polygon',coordinates:[coords]},properties:el.tags||{}});
+
+/* ===== OSM fetch CHUNKED ===== */
+function bboxGridFromAOI(layer, step=0.006) { // ~600-700m; kecilkan jika perlu
+  const ring = getRing(layer);
+  if (!ring || ring.length < 3) return [];
+  let minLat=90, minLon=180, maxLat=-90, maxLon=-180;
+  ring.forEach(p => { minLat=Math.min(minLat,p.lat); maxLat=Math.max(maxLat,p.lat); minLon=Math.min(minLon,p.lng); maxLon=Math.max(maxLon,p.lng); });
+  const tiles=[];
+  for(let lat=minLat; lat<maxLat; lat+=step){
+    for(let lon=minLon; lon<maxLon; lon+=step){
+      const south=lat, north=Math.min(lat+step,maxLat), west=lon, east=Math.min(lon+step,maxLon);
+      tiles.push([west,south,east,north]); // [minLon,minLat,maxLon,maxLat]
     }
-  }); return {type:'FeatureCollection',features};
+  }
+  return tiles;
 }
+async function fetchOverpassBBox(minLon,minLat,maxLon,maxLat) {
+  const query = `[out:json][timeout:60];
+    way["building"](${minLat},${minLon},${maxLat},${maxLon});
+    (._;>;);
+    out body;`;
+  for (const url of overpassEndpoints) {
+    try {
+      const res = await fetch(url, { method:'POST', body:query, headers:{'Content-Type':'text/plain'} });
+      if (!res.ok) continue;
+      const data = await res.json();
+      return data;
+    } catch(e) {}
+  }
+  throw new Error('Overpass gagal di semua endpoint');
+}
+function mergeGeoJSONDedup(gjList) {
+  const seen=new Set(); const out=[];
+  gjList.forEach(gj=>{
+    (gj.features||[]).forEach(f=>{
+      const id=f.properties?._osm_id || JSON.stringify(f.geometry);
+      if(!seen.has(id)){ seen.add(id); out.push(f); }
+    });
+  });
+  return { type:'FeatureCollection', features: out };
+}
+document.getElementById('fetchOSMChunkBtn').onclick = async () => {
+  const aoi = [...drawnItems.getLayers(),...aoiLayer.getLayers()].find(l=>l instanceof L.Polygon && !(l instanceof L.Polyline));
+  if (!aoi) return alert('Buat AOI dulu');
+  toast('Ambil OSM (chunked)…');
+  try {
+    const tiles = bboxGridFromAOI(aoi, 0.006);
+    if (!tiles.length) throw new Error('AOI tidak valid');
+    const parts = [];
+    for (let i=0;i<tiles.length;i++) {
+      const [minLon,minLat,maxLon,maxLat] = tiles[i];
+      const osm = await fetchOverpassBBox(minLon,minLat,maxLon,maxLat);
+      const gj  = osmtogeojson(osm);
+      parts.push(gj);
+      await new Promise(r => setTimeout(r, 400)); // jeda santun
+    }
+    const merged = mergeGeoJSONDedup(parts);
+    buildingLayer.clearLayers();
+    buildingLayer.addData(merged);
+    if (buildingLayer.getLayers().length) {
+      map.fitBounds(buildingLayer.getBounds(), { padding:[30,30] });
+      toast(`OK: ${buildingLayer.getLayers().length} poligon (chunked).`);
+    } else {
+      alert('Tidak ada bangunan di AOI ini.');
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Gagal ambil OSM (chunked). Coba kecilkan AOI/step atau tambah jeda.');
+  }
+};
+
+/* ===== Impor Bangunan (GeoJSON) ===== */
+document.getElementById('importBldBtn').onclick = async () => {
+  const inp = document.getElementById('bldGeoJSON');
+  const f = inp.files && inp.files[0];
+  if (!f) return alert('Pilih file GeoJSON dulu.');
+  try {
+    const text = await f.text();
+    const gj = JSON.parse(text);
+    buildingLayer.clearLayers();
+    buildingLayer.addData(gj);
+    if (buildingLayer.getLayers().length) {
+      map.fitBounds(buildingLayer.getBounds(), { padding:[30,30] });
+      toast(`Impor OK: ${buildingLayer.getLayers().length} poligon bangunan.`);
+    } else {
+      alert('File tidak berisi poligon bangunan.');
+    }
+  } catch (e) {
+    console.error(e);
+    alert('Gagal membaca GeoJSON.');
+  }
+};
+
+/* ===== Geo-AI: centroid points ===== */
 document.getElementById('genHouseBtn').onclick=()=>{
-  if(!buildingLayer.getLayers().length) return alert('Ambil bangunan OSM dulu.');
+  if(!buildingLayer.getLayers().length) return alert('Ambil bangunan OSM dulu / impor GeoJSON.');
   aiCluster.clearLayers();
   const gj=buildingLayer.toGeoJSON();
   gj.features.forEach((f,i)=>{
@@ -314,10 +425,6 @@ document.getElementById('clearBldBtn').onclick=()=>buildingLayer.clearLayers();
 document.getElementById('clearAIBtn').onclick=()=>aiCluster.clearLayers();
 
 /* ===== Popup & modal form ===== */
-function buildPopup(p){
-  const img=p.Photo?`<div style="margin-top:6px"><img src="${p.Photo}" style="max-width:180px;border-radius:8px"></div>`:'';
-  return `<div style="min-width:220px"><b>${p.Name||'(tanpa nama)'}</b><br>${p.Address?p.Address+'<br>':''}${p.City?p.City+'<br>':''}${p.Status?'<i>Status: '+p.Status+'</i><br>':''}<small>${(+p.Latitude).toFixed(6)}, ${(+p.Longitude).toFixed(6)}</small>${img}</div>`;
-}
 const modal=document.getElementById('poiModal');
 const f={name:document.getElementById('f_name'), addr:document.getElementById('f_addr'), city:document.getElementById('f_city'),
          status:document.getElementById('f_status'), lat:document.getElementById('f_lat'), lon:document.getElementById('f_lon'), photo:document.getElementById('f_photo')};
@@ -338,48 +445,28 @@ document.getElementById('poiSave').onclick=()=>{
   modal.style.display='none';
 };
 
-/* ===== AI Chat (rule-based command parser) ===== */
+/* ===== AI Chat (rule-based) ===== */
 function chatAdd(role,text){ const log=document.getElementById('chatlog'); const div=document.createElement('div'); div.className='msg '+(role==='ai'?'ai':'me'); div.textContent=text; log.appendChild(div); log.scrollTop=log.scrollHeight; }
 async function runCommand(cmd){
   const lc=cmd.trim().toLowerCase();
-  // buat aoi bbox=lon,lat,lon,lat
-  if(lc.startsWith('buat aoi bbox=')){ const s=cmd.split('bbox=')[1].trim(); const p=s.split(',').map(x=>Number(x.trim())); if(p.length===4&&!p.some(isNaN)){ aoiLayer.clearLayers(); addBboxToAOI(...p); return 'AOI dari BBOX dibuat.'; } return 'Format BBOX salah.';
-  }
-  // buat aoi poly=lat,lon;lat,lon;...
+  if(lc.startsWith('buat aoi bbox=')){ const s=cmd.split('bbox=')[1].trim(); const p=s.split(',').map(x=>Number(x.trim())); if(p.length===4&&!p.some(isNaN)){ aoiLayer.clearLayers(); addBboxToAOI(...p); return 'AOI dari BBOX dibuat.'; } return 'Format BBOX salah.'; }
   if(lc.startsWith('buat aoi poly=')){ const s=cmd.split('poly=')[1].trim(); const pts=s.split(';').map(t=>t.split(',').map(Number)); if(pts.length>=3){ const poly=L.polygon(pts.map(([a,b])=>[a,b]),{color:'#ffa600',weight:2,fillOpacity:.15}); aoiLayer.clearLayers(); aoiLayer.addLayer(poly); map.fitBounds(poly.getBounds(),{padding:[30,30]}); return 'AOI polygon dibuat.'; } return 'Minimal 3 titik.'; }
   if(lc==='ambil osm'){ await fetchOSM(); return 'Selesai ambil OSM (cek peta).'; }
+  if(lc==='ambil osm chunked'){ document.getElementById('fetchOSMChunkBtn').click(); return 'Sedang ambil OSM chunked…'; }
   if(lc==='ai rumah' || lc==='geoai rumah'){ document.getElementById('genHouseBtn').click(); return 'Titik rumah dibuat.'; }
-  if(lc.startsWith('tambah poi')){ // tambah poi name="A" lat=.. lon=..
-    const m=cmd.match(/name="?([^"]+)"?.*?\blat\s*=\s*([0-9.+-]+).*?\blon[g]?\s*=\s*([0-9.+-]+)/i);
-    if(m){ addPOI({Name:m[1],Latitude:parseFloat(m[2]),Longitude:parseFloat(m[3])}); return 'POI ditambahkan.'; }
-    return 'Gunakan: tambah poi name="Nama" lat=.. lon=..';
-  }
-  if(lc.startsWith('edit poi')){ // edit poi id=.. name="B" ...
-    const idm=cmd.match(/\bid\s*=\s*(\d+)/i); if(!idm) return 'Sertakan id=...';
-    const id=Number(idm[1]); const cur=poiStore.get(id); if(!cur) return 'ID tidak ditemukan.';
-    const n=cmd.match(/name="?([^"]+)"/i); const lt=cmd.match(/\blat\s*=\s*([0-9.+-]+)/i); const ln=cmd.match(/\blon[g]?\s*=\s*([0-9.+-]+)/i);
-    const up={}; if(n) up.Name=n[1]; if(lt) up.Latitude=parseFloat(lt[1]); if(ln) up.Longitude=parseFloat(ln[1]);
-    updatePOI(id,up); return 'POI diupdate.';
-  }
+  if(lc.startsWith('tambah poi')){ const m=cmd.match(/name="?([^"]+)"?.*?\blat\s*=\s*([0-9.+-]+).*?\blon[g]?\s*=\s*([0-9.+-]+)/i); if(m){ addPOI({Name:m[1],Latitude:parseFloat(m[2]),Longitude:parseFloat(m[3])}); return 'POI ditambahkan.'; } return 'Gunakan: tambah poi name="Nama" lat=.. lon=..'; }
+  if(lc.startsWith('edit poi')){ const idm=cmd.match(/\bid\s*=\s*(\d+)/i); if(!idm) return 'Sertakan id=...'; const id=Number(idm[1]); const cur=poiStore.get(id); if(!cur) return 'ID tidak ditemukan.'; const n=cmd.match(/name="?([^"]+)"/i); const lt=cmd.match(/\blat\s*=\s*([0-9.+-]+)/i); const ln=cmd.match(/\blon[g]?\s*=\s*([0-9.+-]+)/i); const up={}; if(n) up.Name=n[1]; if(lt) up.Latitude=parseFloat(lt[1]); if(ln) up.Longitude=parseFloat(ln[1]); updatePOI(id,up); return 'POI diupdate.'; }
   if(lc.startsWith('hapus poi')){ const idm=cmd.match(/\bid\s*=\s*(\d+)/i); if(!idm) return 'Sertakan id=...'; deletePOI(Number(idm[1])); return 'POI dihapus.'; }
   if(lc==='ekspor csv'){ document.getElementById('exportCsvBtn').click(); return 'Mengunduh CSV…'; }
   if(lc==='ekspor geojson'){ document.getElementById('exportGeoBtn').click(); return 'Mengunduh GeoJSON…'; }
-  if(lc==='bantuan' || lc==='help'){
-    return 'Perintah: "buat aoi bbox=lon,lat,lon,lat" • "buat aoi poly=lat,lon;..." • "ambil osm" • "ai rumah" • "tambah poi name="Nama" lat=.. lon=.." • "edit poi id=.. name=.. lat=.. lon=.." • "hapus poi id=.." • "ekspor csv|geojson"';
-  }
+  if(lc==='bantuan' || lc==='help'){ return 'Perintah: "buat aoi bbox=lon,lat,lon,lat" • "buat aoi poly=lat,lon;..." • "ambil osm" • "ambil osm chunked" • "ai rumah" • "tambah poi name="Nama" lat=.. lon=.." • "edit poi id=.. name=.. lat=.. lon=.." • "hapus poi id=.." • "ekspor csv|geojson"'; }
   return 'Tidak dikenali. Ketik "bantuan".';
 }
-document.getElementById('chatSend').onclick=async ()=>{
-  const inp=document.getElementById('chatInput'); const txt=inp.value.trim(); if(!txt) return;
-  chatAdd('me',txt); inp.value=''; const out=await runCommand(txt); chatAdd('ai',out);
-};
+document.getElementById('chatSend').onclick=async ()=>{ const inp=document.getElementById('chatInput'); const txt=inp.value.trim(); if(!txt) return; chatAdd('me',txt); inp.value=''; const out=await runCommand(txt); chatAdd('ai',out); };
 
 /* ===== Init: AOI KL Sentral ===== */
 addBboxToAOI(...KL_BBOX);
 toast('AOI default: KL Sentral. Siap!');
-
-function buildPopupMini(name,lat,lon){return `<b>${name}</b><br><small>${lat.toFixed(6)}, ${lon.toFixed(6)}</small>`;}
-function buildPopup(p){ const img=p.Photo?`<div style="margin-top:6px"><img src="${p.Photo}" style="max-width:180px;border-radius:8px"></div>`:''; return `<div style="min-width:220px"><b>${p.Name||'(tanpa nama)'}</b><br>${p.Address?p.Address+'<br>':''}${p.City?p.City+'<br>':''}${p.Status?'<i>Status: '+p.Status+'</i><br>':''}<small>${(+p.Latitude).toFixed(6)}, ${(+p.Longitude).toFixed(6)}</small>${img}</div>`;}
 </script>
 </body>
 </html>
