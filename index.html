@@ -2,20 +2,21 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>SIGEO AI • POI Generator from OSM Buildings</title>
+  <title>SIGEO AI • POI from OSM Buildings (Rule-Based Chat)</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- Mapbox v3.15.0 (punya setRain, walau belum dipakai di versi ini) -->
+  <!-- Mapbox GL JS -->
   <link href="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.css" rel="stylesheet" />
   <script src="https://api.mapbox.com/mapbox-gl-js/v3.15.0/mapbox-gl.js"></script>
-  <!-- Turf for geoprocessing -->
+  <!-- Turf -->
   <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
-  <!-- SheetJS for XLSX import/export -->
+  <!-- SheetJS -->
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <style>
     html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial}
     #map{position:absolute;inset:0}
+
     .panel{
-      position:absolute; z-index:10; right:12px; top:12px; width:360px; max-width:calc(100% - 24px);
+      position:absolute; z-index:10; right:12px; top:12px; width:380px; max-width:calc(100% - 24px);
       background:rgba(20,20,24,.95); color:#fff; border-radius:12px; box-shadow:0 6px 18px rgba(0,0,0,.25);
       display:flex; flex-direction:column; overflow:hidden;
     }
@@ -23,14 +24,11 @@
     .panel-b{padding:12px; font-size:13px}
     .row{display:flex; gap:8px; flex-wrap:wrap; margin:8px 0}
     .row > * { flex:1 }
-    .btn{
-      appearance:none; border:none; border-radius:8px; padding:8px 10px; font-weight:700; cursor:pointer;
-      background:#22c55e; color:#052e16;
-    }
-    .btn.secondary{ background:#0ea5e9; color:#03202a }
-    .btn.warn{ background:#ef4444; color:#2d0707 }
-    .btn.dark{ background:#374151; color:#d1d5db }
-    .stat{display:flex; gap:12px; align-items:center; margin:6px 0}
+    .btn{appearance:none;border:none;border-radius:8px;padding:8px 10px;font-weight:700;cursor:pointer;background:#22c55e;color:#052e16}
+    .btn.secondary{background:#0ea5e9;color:#03202a}
+    .btn.warn{background:#ef4444;color:#2d0707}
+    .btn.dark{background:#374151;color:#d1d5db}
+    .stat{display:flex;gap:12px;align-items:center;margin:6px 0}
     .stat b{font-size:16px}
     .hint{opacity:.85}
     table{width:100%; border-collapse:collapse; margin-top:8px; font-size:12px}
@@ -38,12 +36,24 @@
     th{opacity:.8}
     .small{font-size:11px; opacity:.8}
     .file{display:inline-block; padding:8px; border:1px dashed rgba(255,255,255,.2); border-radius:8px; text-align:center}
-    .badge{display:inline-block; padding:2px 6px; border-radius:6px; background:#0ea5e9; color:#03202a; font-weight:700; font-size:11px}
+
+    /* Chat mini */
+    .chat{position:absolute;left:12px;bottom:12px;width:360px;max-width:calc(100% - 24px);background:rgba(20,20,24,.95);
+      color:#fff;border-radius:12px;box-shadow:0 6px 18px rgba(0,0,0,.25);display:flex;flex-direction:column;overflow:hidden;z-index:10}
+    .chat-h{padding:10px 12px;font-weight:600;border-bottom:1px solid rgba(255,255,255,.08);display:flex;justify-content:space-between}
+    .chat-b{padding:10px;height:160px;overflow:auto;font-size:12px}
+    .msg{margin:6px 0}.msg.me{text-align:right}.msg .bub{display:inline-block;padding:8px 10px;border-radius:10px;max-width:90%}
+    .msg.me .bub{background:#2563eb}.msg.bot .bub{background:#374151}
+    .chat-i{display:flex;gap:6px;padding:8px;border-top:1px solid rgba(255,255,255,.08);background:rgba(0,0,0,.2)}
+    .chat-i input{flex:1;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,.15);background:#0f172a;color:#fff}
+    .chat-i button{padding:8px 12px;border:none;border-radius:8px;background:#22c55e;color:#052e16;font-weight:700}
+    .badge{display:inline-block;padding:2px 6px;border-radius:6px;background:#0ea5e9;color:#03202a;font-weight:700;font-size:11px}
   </style>
 </head>
 <body>
   <div id="map"></div>
 
+  <!-- Panel utama -->
   <div class="panel">
     <div class="panel-h">
       <span>SIGEO AI — POI Generator</span>
@@ -73,7 +83,7 @@
         <button class="btn dark" id="clearBtn" style="flex:1">Clear POI</button>
       </div>
 
-      <div class="hint small">Tips: Zoom dan geser peta ke area target, lalu klik “Generate POI…”. Ulangi di area lain; POI akan ditambahkan (duplikat otomatis disaring berdasarkan lon-lat).</div>
+      <div class="hint small">Tips: Zoom/geser ke area target, klik “Generate…”. Ulangi di area lain; duplikat otomatis disaring (lon-lat).</div>
 
       <div style="margin-top:10px; font-weight:700">Preview (top 10)</div>
       <table id="poiTable">
@@ -87,9 +97,23 @@
     </div>
   </div>
 
+  <!-- Chat rule-based -->
+  <div class="chat">
+    <div class="chat-h"><span>AI (Rule-Based)</span><span class="badge">/help</span></div>
+    <div class="chat-b" id="chatBody">
+      <div class="msg bot"><div class="bub">
+        Perintah: <i>generate</i>, <i>export csv|xlsx|geojson</i>, <i>clear</i>, <i>fly petronas</i>, <i>style dark|light|satellite|standard</i>, <i>help</i>.
+      </div></div>
+    </div>
+    <div class="chat-i">
+      <input id="chatInput" placeholder="Type command…" />
+      <button id="send">Send</button>
+    </div>
+  </div>
+
 <script>
 /* =========================
-   MAPBOX SETUP
+   MAPBOX
    ========================= */
 mapboxgl.accessToken = 'pk.eyJ1Ijoia2V0dXR0b215c3VoYXJpIiwiYSI6ImNrZmdvOWNvazBtM3EycmxkcHF3eXc0OTgifQ.J6kVGmohIIwY-A0hmt0gtg';
 const PETRONAS = [101.71186, 3.15776];
@@ -109,29 +133,28 @@ map.addControl(new mapboxgl.FullscreenControl(), 'top-right');
 map.addControl(new mapboxgl.ScaleControl({ maxWidth: 120, unit: 'metric' }));
 
 map.on('style.load', () => {
-  // Terrain + sky (opsional, membuat 3D nyaman)
+  // Terrain + sky (opsional)
   try {
     if (!map.getSource('mapbox-dem')) {
       map.addSource('mapbox-dem',{ type:'raster-dem', url:'mapbox://mapbox.mapbox-terrain-dem-v1', tileSize:512 });
     }
     map.setTerrain({ source:'mapbox-dem', exaggeration:1.0 });
     if (!map.getLayer('sky')) {
-      map.addLayer({
-        id:'sky', type:'sky',
+      map.addLayer({ id:'sky', type:'sky',
         paint:{ 'sky-type':'atmosphere','sky-atmosphere-sun':[0,0],'sky-atmosphere-sun-intensity':10 }
       });
     }
   } catch(e){}
 
-  add3DBuildingsIfMissing();
+  // Pastikan layer 3D exist (kalau style tak punya)
+  ensure3DBuildingsLayer();
   ensurePoiSourceLayer();
   updateViewInfo();
 });
 
-/* Tambah 3D building layer kalau belum ada (menggunakan composite/building) */
-function add3DBuildingsIfMissing(){
+/* Jika style belum punya extrusion, tambahkan versi kita (tanpa filter extrude) */
+function ensure3DBuildingsLayer(){
   if (map.getLayer('3d-buildings')) return;
-  // cari label layer agar extrusion berada di bawah label
   const layers = map.getStyle().layers;
   let labelLayerId;
   for (const l of layers) if (l.type==='symbol' && l.layout && l.layout['text-field']) { labelLayerId = l.id; break; }
@@ -146,7 +169,6 @@ function add3DBuildingsIfMissing(){
     id:'3d-buildings',
     source:'composite',
     'source-layer':'building',
-    filter:['==',['get','extrude'],'true'],
     type:'fill-extrusion',
     minzoom:14,
     paint:{
@@ -159,19 +181,54 @@ function add3DBuildingsIfMissing(){
 }
 
 /* =========================
+   KUMPULKAN LAYER BANGUNAN DINAMIS
+   ========================= */
+function collectBuildingLayerIds(){
+  const ids = [];
+  const layers = map.getStyle().layers || [];
+  for (const l of layers){
+    if (l.source === 'composite' && l['source-layer'] === 'building') {
+      // ambil layer fill-extrusion atau fill yang memang menggambar footprint/3D
+      if (l.type === 'fill-extrusion' || l.type === 'fill') ids.push(l.id);
+    }
+  }
+  // fallback: gunakan layer kita jika ada
+  if (map.getLayer('3d-buildings') && !ids.includes('3d-buildings')) ids.push('3d-buildings');
+  return ids;
+}
+
+/* Ambil fitur bangunan yang TERLIHAT di viewport (robust + fallback) */
+function getBuildingsInView(){
+  let feats = [];
+  const buildingLayers = collectBuildingLayerIds();
+  if (buildingLayers.length){
+    feats = map.queryRenderedFeatures({ layers: buildingLayers });
+  } else {
+    // fallback: semua fitur, nanti disaring
+    feats = map.queryRenderedFeatures();
+  }
+  // saring: hanya geometry Polygon/MultiPolygon dengan indikasi bangunan
+  feats = feats.filter(f=>{
+    const gt = f.geometry?.type;
+    const isPoly = (gt==='Polygon' || gt==='MultiPolygon');
+    const p = f.properties || {};
+    const hasBuildingProp = ('building' in p) || ('type' in p) || ('height' in p) || ('levels' in p) || ('building:levels' in p);
+    return isPoly && hasBuildingProp;
+  });
+  return feats;
+}
+
+/* =========================
    POI STORAGE & LAYER
    ========================= */
-let poiFeatures = [];                   // array of GeoJSON Features (Point)
-const poiIndex = new Set();             // lon,lat string to avoid duplicates
+let poiFeatures = [];
+const poiIndex = new Set();
 const POI_SOURCE_ID = 'poi-src';
 const POI_LAYER_ID  = 'poi-layer';
 
 function ensurePoiSourceLayer(){
   if (!map.getSource(POI_SOURCE_ID)) {
-    map.addSource(POI_SOURCE_ID, {
-      type:'geojson',
-      data: { type:'FeatureCollection', features:[] }
-    });
+    map.addSource(POI_SOURCE_ID, { type:'geojson', data: { type:'FeatureCollection', features:[] } });
   }
   if (!map.getLayer(POI_LAYER_ID)) {
     map.addLayer({
@@ -194,76 +251,18 @@ function ensurePoiSourceLayer(){
     });
   }
 }
-
 function refreshPoiLayer(){
   const src = map.getSource(POI_SOURCE_ID);
   if (src) src.setData({ type:'FeatureCollection', features: poiFeatures });
   document.getElementById('poiCount').textContent = String(poiFeatures.length);
   renderPreviewTable();
 }
-
-/* Buat key unik untuk hindari duplikat (pembulatan 7 desimal ~ ~1 cm–1 m) */
-function keyLonLat(lon, lat){
-  const a = Number(lon).toFixed(7);
-  const b = Number(lat).toFixed(7);
-  return `${a},${b}`;
-}
+function keyLonLat(lon, lat){ return `${Number(lon).toFixed(7)},${Number(lat).toFixed(7)}`; }
+function makeId(){ return Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4); }
 
 /* =========================
-   GENERATE POI DARI OSM BUILDINGS (VIEW)
+   GENERATE POI (ROBUST)
    ========================= */
-function generatePOIFromBuildingsInView(){
-  add3DBuildingsIfMissing();
-
-  // Ambil semua fitur building yang sedang dirender (yg ada extrude=true)
-  const feats = map.queryRenderedFeatures({ layers: ['3d-buildings'] });
-  if (!feats || feats.length===0) {
-    alert('Tidak ada bangunan yang dirender di view saat ini. Coba perbesar zoom atau geser ke area dengan bangunan.');
-    return;
-  }
-
-  let added = 0;
-  for (const f of feats) {
-    if (!f.geometry) continue;
-    try {
-      const center = turf.centerOfMass({ type:'Feature', geometry:f.geometry, properties:{} });
-      if (!center || !center.geometry) continue;
-      const [lon, lat] = center.geometry.coordinates;
-
-      // Hindari POI di luar canvas (kadang feature besar di tepian)
-      const pt = map.project([lon,lat]);
-      const canvas = map.getCanvas();
-      if (pt.x < 0 || pt.y < 0 || pt.x > canvas.width || pt.y > canvas.height) continue;
-
-      const name = f.properties?.name || null;
-      const type = f.properties?.type || f.properties?.building || null;
-      const height = resolveHeight(f.properties);
-
-      const key = keyLonLat(lon, lat);
-      if (poiIndex.has(key)) continue; // skip duplikat
-
-      poiIndex.add(key);
-      poiFeatures.push({
-        type:'Feature',
-        geometry:{ type:'Point', coordinates:[lon, lat] },
-        properties:{
-          id: makeId(),
-          name: name || '',
-          type: type || 'building',
-          height: isFinite(height)? Number(height) : null,
-          source: 'osmb(centerOfMass)'
-        }
-      });
-      added++;
-    } catch(e){}
-  }
-
-  refreshPoiLayer();
-  if (added===0) {
-    alert('POI tidak bertambah (mungkin sudah pernah diambil untuk area ini).');
-  }
-}
-
 function resolveHeight(props={}){
   const h = Number(props.height);
   if (isFinite(h) && h>0) return h;
@@ -271,11 +270,51 @@ function resolveHeight(props={}){
   if (isFinite(lv) && lv>0) return lv*3;
   return null;
 }
+function safeCenterPoint(geom){
+  try { return turf.centerOfMass({type:'Feature',geometry:geom}); }
+  catch(e){ try { return turf.pointOnFeature({type:'Feature',geometry:geom}); } catch(e2){ return null; } }
+}
 
-function makeId(){ return Math.random().toString(36).slice(2,8) + Date.now().toString(36).slice(-4); }
+function generatePOIFromOSMB(){
+  const feats = getBuildingsInView();
+  if (!feats || feats.length===0){
+    alert('Tidak ada bangunan yang terdeteksi di view saat ini. Perbesar zoom atau geser ke area yang memiliki bangunan.');
+    return;
+  }
+  let added=0;
+  const canvas = map.getCanvas();
+  for (const f of feats){
+    if (!f.geometry) continue;
+    const center = safeCenterPoint(f.geometry);
+    if (!center) continue;
+    const [lon, lat] = center.geometry.coordinates;
+
+    // pastikan titiknya benar2 di layar (hindari tepi tile/jauh)
+    const pt = map.project([lon,lat]);
+    if (pt.x < 0 || pt.y < 0 || pt.x > canvas.width || pt.y > canvas.height) continue;
+
+    const p = f.properties || {};
+    const name  = p.name || '';
+    const type  = p.type || p.building || '';
+    const height= resolveHeight(p);
+
+    const key = keyLonLat(lon,lat);
+    if (poiIndex.has(key)) continue;
+
+    poiIndex.add(key);
+    poiFeatures.push({
+      type:'Feature',
+      geometry:{ type:'Point', coordinates:[lon,lat] },
+      properties:{ id: makeId(), name, type, height: isFinite(height)?height:null, source:'osmb' }
+    });
+    added++;
+  }
+  refreshPoiLayer();
+  if (added===0) alert('POI tidak bertambah (kemungkinan area ini sudah diambil sebelumnya).');
+}
 
 /* =========================
-   EXPORTERS
+   EXPORT / IMPORT
    ========================= */
 function exportXLSX(){
   const rows = poiFeatures.map((ft,i)=>({
@@ -292,7 +331,6 @@ function exportXLSX(){
   XLSX.utils.book_append_sheet(wb, ws, 'POI');
   XLSX.writeFile(wb, 'poi_from_osmb.xlsx');
 }
-
 function exportCSV(){
   const rows = poiFeatures.map((ft,i)=>({
     id: ft.properties?.id || i+1,
@@ -307,43 +345,31 @@ function exportCSV(){
   const csv = XLSX.utils.sheet_to_csv(ws);
   downloadBlob(csv, 'poi_from_osmb.csv', 'text/csv;charset=utf-8;');
 }
-
 function exportGeoJSON(){
   const gj = { type:'FeatureCollection', features: poiFeatures };
-  const json = JSON.stringify(gj);
-  downloadBlob(json, 'poi_from_osmb.geojson', 'application/geo+json');
+  downloadBlob(JSON.stringify(gj), 'poi_from_osmb.geojson', 'application/geo+json');
 }
-
 function downloadBlob(content, filename, type){
   const blob = new Blob([content], {type});
   const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename; a.click();
+  const a = document.createElement('a'); a.href=url; a.download=filename; a.click();
   URL.revokeObjectURL(url);
 }
-
-/* =========================
-   IMPORT XLSX
-   ========================= */
 async function importXLSX(file){
   const data = await file.arrayBuffer();
-  const wb = XLSX.read(data);
-  const first = wb.SheetNames[0];
-  const ws = wb.Sheets[first];
+  const wb = XLSX.read(data); const ws = wb.Sheets[wb.SheetNames[0]];
   const json = XLSX.utils.sheet_to_json(ws, { defval: '' });
-
-  let added = 0;
-  for (const row of json) {
+  let added=0;
+  for (const row of json){
     const lon = Number(row.lon ?? row.longitude ?? row.x ?? row.lng);
     const lat = Number(row.lat ?? row.latitude ?? row.y);
     if (!isFinite(lon) || !isFinite(lat)) continue;
-    const key = keyLonLat(lon, lat);
+    const key = keyLonLat(lon,lat);
     if (poiIndex.has(key)) continue;
-
     poiIndex.add(key);
     poiFeatures.push({
       type:'Feature',
-      geometry:{ type:'Point', coordinates:[lon, lat] },
+      geometry:{ type:'Point', coordinates:[lon,lat] },
       properties:{
         id: String(row.id || makeId()),
         name: String(row.name || ''),
@@ -359,49 +385,32 @@ async function importXLSX(file){
 }
 
 /* =========================
-   TABLE PREVIEW (TOP 10)
+   TABLE PREVIEW + UI
    ========================= */
 function renderPreviewTable(){
   const tbody = document.querySelector('#poiTable tbody');
   tbody.innerHTML = '';
-  const top = poiFeatures.slice(0,10);
-  top.forEach((ft, i)=>{
-    const tr = document.createElement('tr');
+  poiFeatures.slice(0,10).forEach((ft,i)=>{
     const p = ft.properties || {};
     const [lon,lat] = ft.geometry.coordinates;
-    tr.innerHTML = `
-      <td>${i+1}</td>
-      <td title="${p.name||''}">${(p.name||'')}</td>
-      <td>${p.type||''}</td>
-      <td>${(p.height??'')}</td>
-      <td>${lon.toFixed(6)}</td>
-      <td>${lat.toFixed(6)}</td>`;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td>${i+1}</td><td title="${p.name||''}">${p.name||''}</td><td>${p.type||''}</td><td>${p.height??''}</td><td>${lon.toFixed(6)}</td><td>${lat.toFixed(6)}</td>`;
     tr.style.cursor='pointer';
-    tr.onclick = ()=> map.easeTo({ center:[lon,lat], zoom:18, pitch:60, bearing:map.getBearing() });
+    tr.onclick=()=>map.easeTo({center:[lon,lat],zoom:18,pitch:60});
     tbody.appendChild(tr);
   });
 }
-
-/* =========================
-   UI HOOKS
-   ========================= */
-document.getElementById('genPoiBtn').addEventListener('click', generatePOIFromBuildingsInView);
+document.getElementById('genPoiBtn').addEventListener('click', generatePOIFromOSMB);
 document.getElementById('expXlsxBtn').addEventListener('click', exportXLSX);
 document.getElementById('expCsvBtn').addEventListener('click', exportCSV);
 document.getElementById('expGeoJsonBtn').addEventListener('click', exportGeoJSON);
 document.getElementById('clearBtn').addEventListener('click', ()=>{
   if (!confirm('Hapus semua POI?')) return;
-  poiFeatures = [];
-  poiIndex.clear();
-  refreshPoiLayer();
+  poiFeatures=[]; poiIndex.clear(); refreshPoiLayer();
 });
-
-document.getElementById('impXlsxInput').addEventListener('change', (e)=>{
-  const f = e.target.files?.[0];
-  if (f) importXLSX(f);
-  e.target.value = '';
+document.getElementById('impXlsxInput').addEventListener('change', e=>{
+  const f=e.target.files?.[0]; if(f) importXLSX(f); e.target.value='';
 });
-
 map.on('moveend', updateViewInfo);
 function updateViewInfo(){
   const b = map.getBounds();
@@ -409,6 +418,68 @@ function updateViewInfo(){
   const dy = (b.getNorth()-b.getSouth()).toFixed(4);
   document.getElementById('viewInfo').textContent = `Δlon ${dx} • Δlat ${dy}`;
 }
+
+/* =========================
+   CHAT (RULE-BASED NLP)
+   ========================= */
+const chatBody = document.getElementById('chatBody');
+const chatInput= document.getElementById('chatInput');
+const sendBtn  = document.getElementById('send');
+
+function addMsg(t,who='bot'){ const d=document.createElement('div'); d.className=`msg ${who}`; d.innerHTML=`<div class="bub">${t}</div>`; chatBody.appendChild(d); chatBody.scrollTop=chatBody.scrollHeight; }
+
+function parseCommand(s){
+  const tl = s.trim().toLowerCase();
+  if (tl==='help' || tl==='/help') return {a:'help'};
+  if (tl==='generate') return {a:'gen'};
+  if (tl==='clear') return {a:'clear'};
+  if (/^export\s+(csv|xlsx|geojson)$/.test(tl)) return {a:'export',fmt:tl.split(/\s+/)[1]};
+  if (/^fly\s+petronas$/.test(tl)) return {a:'fly'};
+  const mStyle = tl.match(/^style\s+(dark|light|satellite|standard)$/);
+  if (mStyle) return {a:'style',v:mStyle[1]};
+  return {a:'unknown'};
+}
+function handleCommand(cmd){
+  switch(cmd.a){
+    case 'help':
+      addMsg('Perintah: generate | export csv|xlsx|geojson | clear | fly petronas | style dark|light|satellite|standard');
+      break;
+    case 'gen':
+      generatePOIFromOSMB();
+      addMsg('Generate POI dari bangunan di view…');
+      break;
+    case 'clear':
+      poiFeatures=[]; poiIndex.clear(); refreshPoiLayer(); addMsg('Semua POI dihapus.');
+      break;
+    case 'export':
+      if (cmd.fmt==='csv') exportCSV();
+      else if (cmd.fmt==='xlsx') exportXLSX();
+      else exportGeoJSON();
+      addMsg(`Export ${cmd.fmt} diproses.`);
+      break;
+    case 'fly':
+      map.flyTo({ center: PETRONAS, zoom: 17.2, pitch: 72, bearing: 20, speed:0.6, curve:1.2 });
+      addMsg('Kamera ke Petronas.');
+      break;
+    case 'style':
+      const mapStyle = {
+        dark: 'mapbox://styles/mapbox/dark-v11',
+        light:'mapbox://styles/mapbox/light-v11',
+        satellite:'mapbox://styles/mapbox/satellite-streets-v12',
+        standard:'mapbox://styles/mapbox/standard'
+      }[cmd.v] || 'mapbox://styles/mapbox/standard';
+      map.setStyle(mapStyle);
+      map.once('style.load', ()=>{ ensure3DBuildingsLayer(); ensurePoiSourceLayer(); refreshPoiLayer(); });
+      addMsg(`Style: ${cmd.v}.`);
+      break;
+    default:
+      addMsg('Tidak paham. Coba ketik: help');
+  }
+}
+function onSend(){ const t=chatInput.value.trim(); if(!t) return; addMsg(t,'me'); chatInput.value=''; handleCommand(parseCommand(t)); }
+sendBtn.addEventListener('click', onSend);
+chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') onSend(); });
+
 </script>
 </body>
 </html>
