@@ -38,15 +38,50 @@
     .badge{display:inline-block;padding:2px 6px;border-radius:6px;background:#0ea5e9;color:#03202a;font-weight:700;font-size:11px}
 
     .hint{opacity:.85}
-    .table-wrap{border:1px solid rgba(255,255,255,.15);border-radius:10px;overflow:hidden;margin-top:8px}
-    table{width:100%;border-collapse:collapse;font-size:12px}
-    thead{position:sticky;top:0;background:#0b1220;z-index:1}
-    th,td{border-bottom:1px solid rgba(255,255,255,.08);padding:6px 6px;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    th{opacity:.9}
-    tbody{display:block;max-height:220px;overflow:auto}
-    thead, tbody tr{display:table;table-layout:fixed;width:100%}
-    td[contenteditable="true"]{background:#0f172a;outline:none;border-radius:4px}
-    td[contenteditable="true"]:focus{box-shadow:0 0 0 2px #2563eb inset}
+    
+
+    /* --- TABLE: full 2D scroll + sticky header --- */
+.table-wrap{
+  border:1px solid rgba(255,255,255,.15);
+  border-radius:10px;
+  overflow:auto;           /* <-- horizontal & vertical scroll di wrapper */
+  max-height:260px;        /* tinggi viewport tabel */
+  margin-top:8px;
+}
+
+table{
+  border-collapse:separate;
+  border-spacing:0;
+  font-size:12px;
+  width:max-content;       /* biar bisa melar melewati lebar panel */
+  min-width:1200px;        /* paksa ada horizontal scroll saat kolom banyak */
+}
+
+thead{
+  background:#0b1220;
+}
+
+thead th{
+  position:sticky;         /* header menempel di atas saat vertikal scroll */
+  top:0;
+  z-index:2;
+}
+
+th,td{
+  border-bottom:1px solid rgba(255,255,255,.08);
+  padding:6px 6px;
+  text-align:left;
+  white-space:nowrap;      /* jangan wrap, biar horizontal scroll bekerja */
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+td[contenteditable="true"]{
+  background:#0f172a; outline:none; border-radius:4px;
+}
+td[contenteditable="true"]:focus{
+  box-shadow:0 0 0 2px #2563eb inset;
+}
 
     .chip{display:inline-flex;align-items:center;gap:6px}
     .toggle{display:inline-flex;align-items:center;gap:8px}
